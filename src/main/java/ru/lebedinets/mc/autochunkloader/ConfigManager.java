@@ -6,7 +6,9 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.Plugin;
 
 import java.io.File;
-import java.util.List;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Set;
 
 public class ConfigManager {
     private final Plugin plugin;
@@ -18,8 +20,10 @@ public class ConfigManager {
     private long warningCooldown = 30000L; // Cooldown after showing warning
     private boolean disableWarnings = false;
     private boolean disableRedstone = false;
+    private boolean disableObservers = false;
+    private boolean disableHoppers = false;
     private boolean disableMinecarts = false;
-    private List<String> worlds;
+    private Set<String> worlds;
     private String worldFilterMode;
 
 
@@ -34,7 +38,7 @@ public class ConfigManager {
         File configFile = new File(plugin.getDataFolder(), "config.yml");
         FileConfiguration config = YamlConfiguration.loadConfiguration(configFile);
 
-        addMissingConfigLines(config, plugin.getConfig().getDefaults());
+        addMissingConfigLines(config, Objects.requireNonNull(plugin.getConfig().getDefaults()));
 
         chunkLoadRadius = config.getInt("chunkLoadRadius");
         maxLoadedChunks = config.getInt("maxLoadedChunks");
@@ -44,8 +48,10 @@ public class ConfigManager {
         warningCooldown = config.getLong("warningCooldown");
         disableWarnings = config.getBoolean("disableWarnings");
         disableRedstone = config.getBoolean("disableRedstone");
+        disableObservers = config.getBoolean("disableObservers");
+        disableHoppers = config.getBoolean("disableHoppers");
         disableMinecarts = config.getBoolean("disableMinecarts");
-        worlds = config.getStringList("worlds");
+        worlds = new HashSet<>(config.getStringList("worlds"));
         worldFilterMode = config.getString("worldFilterMode");
     }
 
@@ -94,6 +100,14 @@ public class ConfigManager {
         return disableRedstone;
     }
 
+    public boolean getDisableObservers() {
+        return disableObservers;
+    }
+
+    public boolean getDisableHoppers() {
+        return disableHoppers;
+    }
+
     public boolean getDisableMinecarts() {
         return disableMinecarts;
     }
@@ -102,7 +116,7 @@ public class ConfigManager {
         return worldFilterMode;
     }
 
-    public List<String> getWorlds() {
+    public Set<String> getWorlds() {
         return worlds;
     }
 }

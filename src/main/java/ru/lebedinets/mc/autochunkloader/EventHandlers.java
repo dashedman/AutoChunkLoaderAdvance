@@ -2,26 +2,34 @@ package ru.lebedinets.mc.autochunkloader;
 
 import org.bukkit.*;
 import org.bukkit.block.Block;
+import org.bukkit.block.data.type.Observer;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Minecart;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.block.BlockRedstoneEvent;
+import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.vehicle.VehicleMoveEvent;
+import org.bukkit.inventory.BlockInventoryHolder;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.plugin.Plugin;
 
 import java.util.HashMap;
-import java.util.List;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 public class EventHandlers implements Listener {
     private final Plugin plugin;
     private final ConfigManager configManager;
 
     private long lastCooldownTime = 0L;
-    private int loadedChunksCount = 0;
-    private Map<Chunk, Long> loadedChunks = new HashMap<>();
+    private final Set<Chunk> loadedChunks = new HashSet<>();
+    private final Map<Chunk, Long> temporaryLoadedChunks = new HashMap<>();
+    private final Map<Chunk, Integer> observersCounter = new HashMap<>();
 
     public EventHandlers(Plugin plugin, ConfigManager configMgr) {
         this.plugin = plugin;
@@ -29,7 +37,7 @@ public class EventHandlers implements Listener {
     }
 
     private boolean checkChunkLimit() {
-        if (loadedChunksCount > configManager.getMaxLoadedChunks()) {
+        if (getLoadedChunksCount() > configManager.getMaxLoadedChunks()) {
             long currentTime = System.currentTimeMillis();
             if (currentTime - lastCooldownTime >= configManager.getWarningCooldown()) {
                 lastCooldownTime = currentTime;
@@ -54,7 +62,7 @@ public class EventHandlers implements Listener {
     }
 
     private boolean isWorldAllowed(World world) {
-        List<String> worlds = configManager.getWorlds();
+        Set<String> worlds = configManager.getWorlds();
         String worldFilterMode = configManager.getWorldFilterMode();
         String worldName = world.getName();
 
@@ -62,11 +70,39 @@ public class EventHandlers implements Listener {
             return true;
         }
 
-        if (worldFilterMode.equals("blacklist") && !worlds.contains(worldName)) {
-            return true;
-        }
+        return worldFilterMode.equals("blacklist") && !worlds.contains(worldName);
+    }
 
-        return false;
+    private void reviewRemovedLoadedChunk(Chunk chunk) {
+        // chunk was removed from secondary registry
+        // check and remove it from general registry
+        if (temporaryLoadedChunks.containsKey(chunk) || observersCounter.containsKey(chunk)) {
+            return;
+        }
+        loadedChunks.remove(chunk);
+    }
+
+    private void recalcChunkLoadState(Chunk chunk) {
+        boolean currentForce = chunk.isForceLoaded();
+
+        // check temporary chunks
+        boolean shouldBeForce = loadedChunks.contains(chunk);
+        if (shouldBeForce != currentForce) {
+            // something changed
+            chunk.setForceLoaded(shouldBeForce);
+
+            if (shouldBeForce) {
+                // load chunk
+                if (!chunk.isLoaded()) {
+                    chunk.load();
+                }
+            } else {
+                // chunk will be unloaded
+                if (configManager.getDebugLog()) {
+                    plugin.getLogger().info("Unloading chunk (" + chunk.getX() + ", " + chunk.getZ() + ")...");
+                }
+            }
+        }
     }
 
     @EventHandler
@@ -86,11 +122,15 @@ public class EventHandlers implements Listener {
             Minecart minecart = (Minecart) event.getVehicle();
 
             // Do not load chunks when minecart has a player
-            if (minecart.getPassengers().size() > 0) {
+            if (!minecart.getPassengers().isEmpty()) {
                 Entity passenger = minecart.getPassengers().get(0);
                 if (passenger instanceof Player) {
                     return;
                 }
+            }
+
+            if (!checkChunkLimit()) {
+                return;
             }
 
             if (configManager.getDebugLog()) {
@@ -99,10 +139,6 @@ public class EventHandlers implements Listener {
 
             Chunk chunk = minecart.getLocation().getChunk();
             World world = chunk.getWorld();
-
-            if (!checkChunkLimit()) {
-                return;
-            }
 
             if (configManager.getDebugLog()) {
                 plugin.getLogger().info("Loading additional chunks...");
@@ -115,12 +151,7 @@ public class EventHandlers implements Listener {
                     int targetZ = chunk.getZ() + z;
 
                     Chunk targetChunk = world.getChunkAt(targetX, targetZ);
-                    if (!loadedChunks.containsKey(targetChunk)) {
-                        world.setChunkForceLoaded(targetX, targetZ, true);
-                        chunk.load();
-                        loadedChunksCount++;
-                        loadedChunks.put(targetChunk, System.currentTimeMillis() + unloadDelay);
-                    }
+                    updateChunkTTL(targetChunk);
                 }
             }
         }
@@ -132,25 +163,24 @@ public class EventHandlers implements Listener {
             return;
         }
 
-        if (!isWorldAllowed(event.getBlock().getWorld())) {
+        if (!checkChunkLimit()) {
             return;
         }
 
         int chunkLoadRadius = configManager.getChunkLoadRadius();
-        long unloadDelay = configManager.getUnloadDelay();
 
         Block redstoneBlock = event.getBlock();
+
+        if (!isWorldAllowed(redstoneBlock.getWorld())) {
+            return;
+        }
+
         if (configManager.getDebugLog()) {
             plugin.getLogger().info("Redstone signal detected at " + redstoneBlock.getLocation());
         }
 
         World world = redstoneBlock.getWorld();
-        Location redstoneLocation = redstoneBlock.getLocation();
-        Chunk centerChunk = redstoneLocation.getChunk();
-
-        if (!checkChunkLimit()) {
-            return;
-        }
+        Chunk centerChunk = redstoneBlock.getLocation().getChunk();
 
         // Load and set force-loaded for chunks around the redstone block
         for (int x = -chunkLoadRadius; x <= chunkLoadRadius; x++) {
@@ -159,36 +189,139 @@ public class EventHandlers implements Listener {
                 int targetZ = centerChunk.getZ() + z;
 
                 Chunk targetChunk = world.getChunkAt(targetX, targetZ);
-                if (!loadedChunks.containsKey(targetChunk)) {
-                    world.setChunkForceLoaded(targetX, targetZ, true);
-                    centerChunk.load();
-                    loadedChunksCount++;
-                    loadedChunks.put(targetChunk, System.currentTimeMillis() + unloadDelay);
+                updateChunkTTL(targetChunk);
+            }
+        }
+    }
+
+    @EventHandler
+    public void onBlockPlace(BlockPlaceEvent event) {
+        Block block = event.getBlock();
+        if (block instanceof Observer) {
+            if (configManager.getDisableObservers()) {
+                return;
+            }
+
+            if (!checkChunkLimit()) {
+                return;
+            }
+
+            Chunk eventChunk = block.getLocation().getChunk();
+            World world = eventChunk.getWorld();
+            int chunkLoadRadius = configManager.getChunkLoadRadius();
+
+            // Load and set force-loaded for chunks around the redstone block
+            for (int x = -chunkLoadRadius; x <= chunkLoadRadius; x++) {
+                for (int z = -chunkLoadRadius; z <= chunkLoadRadius; z++) {
+                    int targetX = eventChunk.getX() + x;
+                    int targetZ = eventChunk.getZ() + z;
+
+                    Chunk targetChunk = world.getChunkAt(targetX, targetZ);
+                    Integer counter = observersCounter.get(targetChunk);
+                    if (counter == null) {
+                        observersCounter.put(targetChunk, 1);
+                        loadedChunks.add(targetChunk);
+                        recalcChunkLoadState(targetChunk);
+                    } else {
+                        observersCounter.put(targetChunk, counter + 1);
+                    }
+
                 }
             }
         }
+    }
+
+    @EventHandler
+    public void onBlockBreak(BlockBreakEvent event) {
+        Block block = event.getBlock();
+        if (block instanceof Observer) {
+            if (configManager.getDisableObservers()) {
+                return;
+            }
+
+            Chunk eventChunk = block.getLocation().getChunk();
+            World world = eventChunk.getWorld();
+            int chunkLoadRadius = configManager.getChunkLoadRadius();
+
+            // Load and set force-loaded for chunks around the redstone block
+            for (int x = -chunkLoadRadius; x <= chunkLoadRadius; x++) {
+                for (int z = -chunkLoadRadius; z <= chunkLoadRadius; z++) {
+                    int targetX = eventChunk.getX() + x;
+                    int targetZ = eventChunk.getZ() + z;
+
+                    Chunk targetChunk = world.getChunkAt(targetX, targetZ);
+                    Integer counter = observersCounter.getOrDefault(targetChunk, 0);
+                    counter--;
+                    if (counter <= 0) {
+                        observersCounter.remove(targetChunk);
+                        reviewRemovedLoadedChunk(targetChunk);
+                        recalcChunkLoadState(targetChunk);
+                    } else {
+                        observersCounter.put(targetChunk, counter);
+                    }
+                }
+            }
+        }
+    }
+
+    @EventHandler
+    public void onInventoryMoveItem(InventoryMoveItemEvent event) {
+        InventoryHolder holder = event.getInitiator().getHolder();
+        if (holder instanceof BlockInventoryHolder) {
+            // this is hopper or some that can pass items to somewhere
+            if (configManager.getDisableHoppers()) {
+                return;
+            }
+
+            Block block = ((BlockInventoryHolder) holder).getBlock();
+
+            if (!isWorldAllowed(block.getWorld())) {
+                return;
+            }
+
+            if (configManager.getDebugLog()) {
+                plugin.getLogger().info("Hopper pass detected at " + block.getLocation());
+            }
+
+            World world = block.getWorld();
+            Chunk centerChunk = block.getLocation().getChunk();
+
+            int chunkLoadRadius = configManager.getChunkLoadRadius();
+            // Load and set force-loaded for chunks around the redstone block
+            for (int x = -chunkLoadRadius; x <= chunkLoadRadius; x++) {
+                for (int z = -chunkLoadRadius; z <= chunkLoadRadius; z++) {
+                    int targetX = centerChunk.getX() + x;
+                    int targetZ = centerChunk.getZ() + z;
+
+                    Chunk targetChunk = world.getChunkAt(targetX, targetZ);
+                    updateChunkTTL(targetChunk);
+                }
+            }
+        }
+    }
+
+    public void updateChunkTTL(Chunk chunk) {
+        temporaryLoadedChunks.put(chunk, System.currentTimeMillis() + configManager.getUnloadDelay());
+        loadedChunks.add(chunk);
+        recalcChunkLoadState(chunk);
     }
 
     public void unloadExpiredChunks() {
         long currentTime = System.currentTimeMillis();
-        for (Map.Entry<Chunk, Long> entry : loadedChunks.entrySet()) {
+        for (Map.Entry<Chunk, Long> entry : temporaryLoadedChunks.entrySet()) {
             Chunk chunk = entry.getKey();
             long expirationTime = entry.getValue();
 
             if (currentTime >= expirationTime) {
-                World world = chunk.getWorld();
-                world.setChunkForceLoaded(chunk.getX(), chunk.getZ(), false);
-                loadedChunksCount--;
-                if (configManager.getDebugLog()) {
-                    plugin.getLogger().info("Unloading chunk (" + chunk.getX() + ", " + chunk.getZ() + ")...");
-                }
+                temporaryLoadedChunks.remove(chunk);
+                reviewRemovedLoadedChunk(chunk);
+                recalcChunkLoadState(chunk);
             }
         }
-        loadedChunks.entrySet().removeIf(entry -> currentTime >= entry.getValue());
     }
 
     public int getLoadedChunksCount() {
-        return loadedChunksCount;
+        return loadedChunks.size();
     }
 
     public void resetCooldown() {

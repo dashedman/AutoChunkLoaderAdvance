@@ -3,9 +3,9 @@ version: '${project.version}'
 main: ru.lebedinets.mc.autochunkloader.AutoChunkLoader
 api-version: 1.13
 prefix: AutoChunkLoader
-authors: [Mikhail Lebedinets]
+authors: [dashedman, Mikhail Lebedinets]
 description: A simple plugin that loads chunks around long railways and redstone signals
-website: https://github.com/iwalfy/AutoChunkLoader
+website: https://github.com/dashedman/AutoChunkLoaderAdvance
 commands:
   autochunkloader:
     aliases: [acl]

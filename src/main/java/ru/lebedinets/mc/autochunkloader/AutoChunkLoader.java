@@ -4,11 +4,12 @@ import org.bstats.bukkit.Metrics;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.Objects;
+
 public final class AutoChunkLoader extends JavaPlugin {
 
     private ConfigManager configManager;
     private EventHandlers eventHandlers;
-    private final UpdateChecker updateChecker = new UpdateChecker(this.getDescription(), this.getServer());
 
     @Override
     public void onEnable() {
@@ -24,14 +25,12 @@ public final class AutoChunkLoader extends JavaPlugin {
         Bukkit.getScheduler().scheduleSyncRepeatingTask(this, eventHandlers::unloadExpiredChunks, 0, configManager.getUnloadPeriod());
 
         Commands commands = new Commands(this, configManager, eventHandlers);
-        getCommand("acl").setExecutor(commands);
-        getCommand("autochunkloader").setExecutor(commands);
+        Objects.requireNonNull(getCommand("acl")).setExecutor(commands);
+        Objects.requireNonNull(getCommand("autochunkloader")).setExecutor(commands);
 
         // bStats
         int pluginId = 19552;
         Metrics metrics = new Metrics(this, pluginId);
-
-        updateChecker.checkForUpdates();
     }
 
     @Override

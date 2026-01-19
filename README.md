@@ -1,7 +1,13 @@
-# ![logo](https://i.imgur.com/0UFlvHt.png) AutoChunkLoader
-A simple plugin that loads chunks around long railways and redstone signals
+# ![logo](https://i.imgur.com/0UFlvHt.png) AutoChunkLoaderAdvanced
 
-It can be used for transporting resources in chest minecarts through whole world or making large redstone circuits.
+_Fork of [AutoChunkLoader](https://github.com/mlebdmcdev/AutoChunkLoader) cause it has some bug, 
+and doesn't support observers and hoppers._
+
+A simple plugin that loads chunks around long railways and redstone signals, 
+and keep chunks with observers and working hoppers (pipes and timers).
+
+It can be used for transporting resources in chest minecarts through whole world, 
+making large redstone circuits, making auto-farms on a long distance.
 Keep in mind with incorrect use this plugin can negatively affect server performance!
 
 ### Keep in mind with incorrect use this plugin can negatively affect server performance!
@@ -11,7 +17,5 @@ Installation:
  - Put this file into `/plugins` folder of your Spigot server
  - Restart server
  - Modify `/plugins/AutoChunkLoader/config.yml` file for your needs
-
-Contant: https://t.me/mlebd
 
 [![stats](https://bstats.org/signatures/bukkit/AutoChunkLoader.svg)](https://bstats.org/plugin/bukkit/AutoChunkLoader/19552)
