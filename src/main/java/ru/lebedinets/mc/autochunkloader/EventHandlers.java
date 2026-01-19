@@ -8,14 +8,13 @@ import org.bukkit.entity.Minecart;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.block.BlockBreakEvent;
-import org.bukkit.event.block.BlockPlaceEvent;
-import org.bukkit.event.block.BlockRedstoneEvent;
+import org.bukkit.event.block.*;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.vehicle.VehicleMoveEvent;
 import org.bukkit.inventory.BlockInventoryHolder;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.util.Vector;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -207,27 +206,7 @@ public class EventHandlers implements Listener {
             }
 
             Chunk eventChunk = block.getLocation().getChunk();
-            World world = eventChunk.getWorld();
-            int chunkLoadRadius = configManager.getChunkLoadRadius();
-
-            // Load and set force-loaded for chunks around the redstone block
-            for (int x = -chunkLoadRadius; x <= chunkLoadRadius; x++) {
-                for (int z = -chunkLoadRadius; z <= chunkLoadRadius; z++) {
-                    int targetX = eventChunk.getX() + x;
-                    int targetZ = eventChunk.getZ() + z;
-
-                    Chunk targetChunk = world.getChunkAt(targetX, targetZ);
-                    Integer counter = observersCounter.get(targetChunk);
-                    if (counter == null) {
-                        observersCounter.put(targetChunk, 1);
-                        loadedChunks.add(targetChunk);
-                        recalcChunkLoadState(targetChunk);
-                    } else {
-                        observersCounter.put(targetChunk, counter + 1);
-                    }
-
-                }
-            }
+            addObserverToChunk(eventChunk);
         }
     }
 
@@ -240,28 +219,100 @@ public class EventHandlers implements Listener {
             }
 
             Chunk eventChunk = block.getLocation().getChunk();
-            World world = eventChunk.getWorld();
-            int chunkLoadRadius = configManager.getChunkLoadRadius();
+            removeObserverFromChunk(eventChunk);
+        }
+    }
 
-            // Load and set force-loaded for chunks around the redstone block
-            for (int x = -chunkLoadRadius; x <= chunkLoadRadius; x++) {
-                for (int z = -chunkLoadRadius; z <= chunkLoadRadius; z++) {
-                    int targetX = eventChunk.getX() + x;
-                    int targetZ = eventChunk.getZ() + z;
+    public void addObserverToChunk(Chunk chunk) {
+        World world = chunk.getWorld();
+        int chunkLoadRadius = configManager.getChunkLoadRadius();
 
-                    Chunk targetChunk = world.getChunkAt(targetX, targetZ);
-                    Integer counter = observersCounter.getOrDefault(targetChunk, 0);
-                    counter--;
-                    if (counter <= 0) {
-                        observersCounter.remove(targetChunk);
-                        reviewRemovedLoadedChunk(targetChunk);
-                        recalcChunkLoadState(targetChunk);
-                    } else {
-                        observersCounter.put(targetChunk, counter);
-                    }
+        // Load and set force-loaded for chunks around the redstone block
+        for (int x = -chunkLoadRadius; x <= chunkLoadRadius; x++) {
+            for (int z = -chunkLoadRadius; z <= chunkLoadRadius; z++) {
+                int targetX = chunk.getX() + x;
+                int targetZ = chunk.getZ() + z;
+
+                Chunk targetChunk = world.getChunkAt(targetX, targetZ);
+                Integer counter = observersCounter.get(targetChunk);
+                if (counter == null) {
+                    observersCounter.put(targetChunk, 1);
+                    loadedChunks.add(targetChunk);
+                    recalcChunkLoadState(targetChunk);
+                } else {
+                    observersCounter.put(targetChunk, counter + 1);
+                }
+
+            }
+        }
+    }
+
+    public void removeObserverFromChunk(Chunk chunk) {
+        World world = chunk.getWorld();
+        int chunkLoadRadius = configManager.getChunkLoadRadius();
+
+        // Load and set force-loaded for chunks around the redstone block
+        for (int x = -chunkLoadRadius; x <= chunkLoadRadius; x++) {
+            for (int z = -chunkLoadRadius; z <= chunkLoadRadius; z++) {
+                int targetX = chunk.getX() + x;
+                int targetZ = chunk.getZ() + z;
+
+                Chunk targetChunk = world.getChunkAt(targetX, targetZ);
+                Integer counter = observersCounter.getOrDefault(targetChunk, 0);
+                counter--;
+                if (counter <= 0) {
+                    observersCounter.remove(targetChunk);
+                    reviewRemovedLoadedChunk(targetChunk);
+                    recalcChunkLoadState(targetChunk);
+                } else {
+                    observersCounter.put(targetChunk, counter);
                 }
             }
         }
+    }
+
+    @EventHandler
+    public void onBlockPistonExtend(BlockPistonExtendEvent event) {
+        Vector moveDirection = event.getDirection().getDirection();
+        for (Block block : event.getBlocks()) {
+            if (block.getBlockData() instanceof Observer) {
+                if (configManager.getDisableObservers()) {
+                    continue;
+                }
+                processObserverMoving(block, moveDirection);
+            }
+        }
+    }
+
+    @EventHandler
+    public void onBlockPistonRetract(BlockPistonRetractEvent event) {
+        Vector moveDirection = event.getDirection().getDirection();
+        for (Block block : event.getBlocks()) {
+            if (block.getBlockData() instanceof Observer) {
+                if (configManager.getDisableObservers()) {
+                    continue;
+                }
+                processObserverMoving(block, moveDirection);
+            }
+        }
+    }
+
+    public void processObserverMoving(Block observer, Vector direction) {
+        // process moving observer by piston over chunks
+        // for flying machines
+        Location currLoc = observer.getLocation();
+        Location nextLoc = currLoc.add(direction);
+
+        Chunk curentChunk = observer.getChunk();
+        Chunk nextChunk = observer.getWorld().getChunkAt(nextLoc);
+
+        if (nextChunk.equals(curentChunk)) {
+            // do nothing
+            return;
+        }
+
+        addObserverToChunk(nextChunk);
+        removeObserverFromChunk(curentChunk);
     }
 
     @EventHandler
