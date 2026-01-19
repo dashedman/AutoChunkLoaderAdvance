@@ -197,7 +197,7 @@ public class EventHandlers implements Listener {
     @EventHandler
     public void onBlockPlace(BlockPlaceEvent event) {
         Block block = event.getBlock();
-        if (block instanceof Observer) {
+        if (block.getBlockData() instanceof Observer) {
             if (configManager.getDisableObservers()) {
                 return;
             }
@@ -234,7 +234,7 @@ public class EventHandlers implements Listener {
     @EventHandler
     public void onBlockBreak(BlockBreakEvent event) {
         Block block = event.getBlock();
-        if (block instanceof Observer) {
+        if (block.getBlockData() instanceof Observer) {
             if (configManager.getDisableObservers()) {
                 return;
             }
