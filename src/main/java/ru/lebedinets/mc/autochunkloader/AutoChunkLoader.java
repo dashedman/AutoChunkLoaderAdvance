@@ -3,6 +3,7 @@ package ru.lebedinets.mc.autochunkloader;
 import org.bstats.bukkit.Metrics;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitScheduler;
 
 import java.util.Objects;
 
@@ -17,12 +18,13 @@ public final class AutoChunkLoader extends JavaPlugin {
         getLogger().info("AutoChunkLoader has been started!");
 
         configManager = new ConfigManager(this);
+        BukkitScheduler scheduler = Bukkit.getScheduler();
 
-        eventHandlers = new EventHandlers(this, configManager);
+        eventHandlers = new EventHandlers(this, configManager, scheduler);
         getServer().getPluginManager().registerEvents(eventHandlers, this);
 
         // Schedule a repeating task to check and unload chunks without minecarts
-        Bukkit.getScheduler().scheduleSyncRepeatingTask(this, eventHandlers::unloadExpiredChunks, 0, configManager.getUnloadPeriod());
+        scheduler.scheduleSyncRepeatingTask(this, eventHandlers::unloadExpiredChunks, 0, configManager.getUnloadPeriod());
 
         Commands commands = new Commands(this, configManager, eventHandlers);
         Objects.requireNonNull(getCommand("acl")).setExecutor(commands);

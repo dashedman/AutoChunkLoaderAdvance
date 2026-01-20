@@ -1,7 +1,9 @@
 package ru.lebedinets.mc.autochunkloader;
 
+import io.arxila.javatuples.Trio;
 import org.bukkit.*;
 import org.bukkit.block.Block;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.type.Observer;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Minecart;
@@ -11,9 +13,11 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.*;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.vehicle.VehicleMoveEvent;
+import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.inventory.BlockInventoryHolder;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.scheduler.BukkitScheduler;
 import org.bukkit.util.Vector;
 
 import java.util.HashMap;
@@ -24,15 +28,17 @@ import java.util.Set;
 public class EventHandlers implements Listener {
     private final Plugin plugin;
     private final ConfigManager configManager;
+    private final BukkitScheduler scheduler;
 
     private long lastCooldownTime = 0L;
-    private final Set<Chunk> loadedChunks = new HashSet<>();
-    private final Map<Chunk, Long> temporaryLoadedChunks = new HashMap<>();
-    private final Map<Chunk, Integer> observersCounter = new HashMap<>();
+    private final Set<Trio<Integer, Integer, String>> loadedChunks = new HashSet<>();
+    private final Map<Trio<Integer, Integer, String>, Long> temporaryLoadedChunks = new HashMap<>();
+    private final Map<Trio<Integer, Integer, String>, Integer> observersCounter = new HashMap<>();
 
-    public EventHandlers(Plugin plugin, ConfigManager configMgr) {
+    public EventHandlers(Plugin plugin, ConfigManager configMgr, BukkitScheduler scheduler) {
         this.plugin = plugin;
         this.configManager = configMgr;
+        this.scheduler = scheduler;
     }
 
     private boolean checkChunkLimit() {
@@ -72,20 +78,20 @@ public class EventHandlers implements Listener {
         return worldFilterMode.equals("blacklist") && !worlds.contains(worldName);
     }
 
-    private void reviewRemovedLoadedChunk(Chunk chunk) {
+    private void reviewRemovedLoadedChunk(Trio<Integer, Integer, String> chunkKey) {
         // chunk was removed from secondary registry
         // check and remove it from general registry
-        if (temporaryLoadedChunks.containsKey(chunk) || observersCounter.containsKey(chunk)) {
+        if (temporaryLoadedChunks.containsKey(chunkKey) || observersCounter.containsKey(chunkKey)) {
             return;
         }
-        loadedChunks.remove(chunk);
+        loadedChunks.remove(chunkKey);
     }
 
-    private void recalcChunkLoadState(Chunk chunk) {
+    private void recalcChunkLoadState(ChunkWithKey chunk) {
         boolean currentForce = chunk.isForceLoaded();
 
         // check temporary chunks
-        boolean shouldBeForce = loadedChunks.contains(chunk);
+        boolean shouldBeForce = loadedChunks.contains(chunk.getChunkKey());
         if (shouldBeForce != currentForce) {
             // something changed
             chunk.setForceLoaded(shouldBeForce);
@@ -149,7 +155,7 @@ public class EventHandlers implements Listener {
                     int targetX = chunk.getX() + x;
                     int targetZ = chunk.getZ() + z;
 
-                    Chunk targetChunk = world.getChunkAt(targetX, targetZ);
+                    ChunkWithKey targetChunk = (ChunkWithKey) world.getChunkAt(targetX, targetZ);
                     updateChunkTTL(targetChunk);
                 }
             }
@@ -187,7 +193,7 @@ public class EventHandlers implements Listener {
                 int targetX = centerChunk.getX() + x;
                 int targetZ = centerChunk.getZ() + z;
 
-                Chunk targetChunk = world.getChunkAt(targetX, targetZ);
+                ChunkWithKey targetChunk = (ChunkWithKey) world.getChunkAt(targetX, targetZ);
                 updateChunkTTL(targetChunk);
             }
         }
@@ -233,14 +239,16 @@ public class EventHandlers implements Listener {
                 int targetX = chunk.getX() + x;
                 int targetZ = chunk.getZ() + z;
 
-                Chunk targetChunk = world.getChunkAt(targetX, targetZ);
-                Integer counter = observersCounter.get(targetChunk);
+                ChunkWithKey targetChunk = (ChunkWithKey) world.getChunkAt(targetX, targetZ);
+                Trio<Integer, Integer, String> targetChunkKey = targetChunk.getChunkKey();
+
+                Integer counter = observersCounter.get(targetChunkKey);
                 if (counter == null) {
-                    observersCounter.put(targetChunk, 1);
-                    loadedChunks.add(targetChunk);
+                    observersCounter.put(targetChunkKey, 1);
+                    loadedChunks.add(targetChunkKey);
                     recalcChunkLoadState(targetChunk);
                 } else {
-                    observersCounter.put(targetChunk, counter + 1);
+                    observersCounter.put(targetChunkKey, counter + 1);
                 }
 
             }
@@ -257,15 +265,17 @@ public class EventHandlers implements Listener {
                 int targetX = chunk.getX() + x;
                 int targetZ = chunk.getZ() + z;
 
-                Chunk targetChunk = world.getChunkAt(targetX, targetZ);
-                Integer counter = observersCounter.getOrDefault(targetChunk, 0);
+                ChunkWithKey targetChunk = (ChunkWithKey) world.getChunkAt(targetX, targetZ);
+                Trio<Integer, Integer, String> targetChunkKey = targetChunk.getChunkKey();
+
+                Integer counter = observersCounter.getOrDefault(targetChunkKey, 0);
                 counter--;
                 if (counter <= 0) {
-                    observersCounter.remove(targetChunk);
-                    reviewRemovedLoadedChunk(targetChunk);
+                    observersCounter.remove(targetChunkKey);
+                    reviewRemovedLoadedChunk(targetChunkKey);
                     recalcChunkLoadState(targetChunk);
                 } else {
-                    observersCounter.put(targetChunk, counter);
+                    observersCounter.put(targetChunkKey, counter);
                 }
             }
         }
@@ -344,28 +354,71 @@ public class EventHandlers implements Listener {
                     int targetX = centerChunk.getX() + x;
                     int targetZ = centerChunk.getZ() + z;
 
-                    Chunk targetChunk = world.getChunkAt(targetX, targetZ);
+                    ChunkWithKey targetChunk = (ChunkWithKey) world.getChunkAt(targetX, targetZ);
                     updateChunkTTL(targetChunk);
                 }
             }
         }
     }
 
-    public void updateChunkTTL(Chunk chunk) {
-        temporaryLoadedChunks.put(chunk, System.currentTimeMillis() + configManager.getUnloadDelay());
-        loadedChunks.add(chunk);
+    @EventHandler
+    public void onChunkLoad(ChunkLoadEvent event) {
+        ChunkSnapshot snapshot = event.getChunk().getChunkSnapshot(true, false, false);
+        scanChunkSnapshotAsync(snapshot);
+    }
+
+    public void scanChunkSnapshotAsync(ChunkSnapshot chunkSnapshot) {
+        Runnable runnable = () -> {
+            // count observers
+            int observersCounter = 0;
+            for (int x = 0; x < 16; x++) {
+                for (int z = 0; z < 16; z++) {
+                    int maxY = chunkSnapshot.getHighestBlockYAt(x, z);
+                    for (int y = 0; y <= maxY; y++) {
+                        BlockData blockData = chunkSnapshot.getBlockData(x, y, z);
+                        if (blockData instanceof Observer) {
+                            observersCounter++;
+                        }
+                    }
+                }
+            }
+            Trio<Integer, Integer, String> chunkKey = ChunkWithKey.getChunkKey(chunkSnapshot);
+            this.observersCounter.put(chunkKey, observersCounter);
+        };
+
+        scheduler.runTaskAsynchronously(plugin, runnable);
+    }
+
+    public void updateChunkTTL(ChunkWithKey chunk) {
+        Trio<Integer, Integer, String> chunkKey = chunk.getChunkKey();
+        chunk.getWorld().getName();
+        temporaryLoadedChunks.put(chunkKey, System.currentTimeMillis() + configManager.getUnloadDelay());
+        loadedChunks.add(chunkKey);
         recalcChunkLoadState(chunk);
     }
 
     public void unloadExpiredChunks() {
         long currentTime = System.currentTimeMillis();
-        for (Map.Entry<Chunk, Long> entry : temporaryLoadedChunks.entrySet()) {
-            Chunk chunk = entry.getKey();
+        for (Map.Entry<Trio<Integer, Integer, String>, Long> entry : temporaryLoadedChunks.entrySet()) {
             long expirationTime = entry.getValue();
 
             if (currentTime >= expirationTime) {
-                temporaryLoadedChunks.remove(chunk);
-                reviewRemovedLoadedChunk(chunk);
+                Trio<Integer, Integer, String> chunkKey = entry.getKey();
+
+                temporaryLoadedChunks.remove(chunkKey);
+                reviewRemovedLoadedChunk(chunkKey);
+
+                int chunkX = chunkKey.value0();
+                int chunkZ = chunkKey.value1();
+                String chunkWorldName = chunkKey.value2();
+
+                World world = plugin.getServer().getWorld(chunkWorldName);
+                if (world == null) {
+                    // world not exist, ignore
+                    continue;
+                }
+
+                ChunkWithKey chunk = (ChunkWithKey) world.getChunkAt(chunkX, chunkZ);
                 recalcChunkLoadState(chunk);
             }
         }

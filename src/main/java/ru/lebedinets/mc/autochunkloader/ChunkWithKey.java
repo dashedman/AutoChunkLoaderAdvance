@@ -1,0 +1,56 @@
+package ru.lebedinets.mc.autochunkloader;
+
+import io.arxila.javatuples.Trio;
+import org.bukkit.Chunk;
+import org.bukkit.ChunkSnapshot;
+import org.bukkit.Location;
+
+import java.util.Objects;
+
+public interface ChunkWithKey extends Chunk {
+    // inspired by Paper
+    // idea taken from https://github.com/PaperMC/Paper/blob/main/paper-api/src/main/java/org/bukkit/Chunk.java
+    // to not move from spigot on paper only
+    // added chunk's world name
+
+    // Paper start
+    /**
+     * @return The Chunks X and Z coordinates with world name
+     */
+    default Trio<Integer, Integer, String> getChunkKey() {
+        return getChunkKey(getX(), getZ(), getWorld().getName());
+    }
+
+    /**
+     * @param loc Location to get chunk key
+     * @return Location's chunk coordinates with world name
+     */
+    static Trio<Integer, Integer, String> getChunkKey(Location loc) {
+        return getChunkKey(
+                (int) Math.floor(loc.getX()) >> 4,
+                (int) Math.floor(loc.getZ()) >> 4,
+                Objects.requireNonNull(loc.getWorld()).getName()
+        );
+    }
+
+    /**
+     * @param snapshot ChunkSnapshot to get chunk key
+     * @return ChunkSnapshot's chunk coordinates with world name
+     */
+    static Trio<Integer, Integer, String> getChunkKey(ChunkSnapshot snapshot) {
+        return getChunkKey(
+                snapshot.getX(),
+                snapshot.getZ(),
+                snapshot.getWorldName()
+        );
+    }
+
+    /**
+     * @param x X Coordinate
+     * @param z Z Coordinate
+     * @return Chunk coordinates with world name
+     */
+    static Trio<Integer, Integer, String> getChunkKey(int x, int z, String world) {
+        return new Trio<>(x, z, world);
+    }
+}
