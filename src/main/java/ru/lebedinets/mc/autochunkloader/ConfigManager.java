@@ -18,6 +18,7 @@ public class ConfigManager {
     private long unloadDelay = 30000L; // Delay in milliseconds before chunk unload
     private int unloadPeriod = 20; // Period in ticks (each second)
     private long warningCooldown = 30000L; // Cooldown after showing warning
+    private long backupPeriod = 120000L; // Backup period
     private boolean disableWarnings = false;
     private boolean disableRedstone = false;
     private boolean disableObservers = false;
@@ -46,6 +47,7 @@ public class ConfigManager {
         unloadDelay = config.getLong("unloadDelay");
         unloadPeriod = config.getInt("unloadPeriod");
         warningCooldown = config.getLong("warningCooldown");
+        backupPeriod = config.getLong("backupPeriod");
         disableWarnings = config.getBoolean("disableWarnings");
         disableRedstone = config.getBoolean("disableRedstone");
         disableObservers = config.getBoolean("disableObservers");
@@ -90,6 +92,10 @@ public class ConfigManager {
 
     public long getWarningCooldown() {
         return warningCooldown;
+    }
+
+    public long getBackupPeriod() {
+        return backupPeriod;
     }
 
     public boolean getDisableWarnings() {

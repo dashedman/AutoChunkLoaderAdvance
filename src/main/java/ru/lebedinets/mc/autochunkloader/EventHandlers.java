@@ -110,6 +110,12 @@ public class EventHandlers implements Listener {
         }
     }
 
+    private void recalcChunkLoadStateByKey(Trio<Integer, Integer, String> chunkKey) {
+        ChunkWithKey chunk = ChunkWithKey.getChunkByKey(plugin.getServer(), chunkKey);
+        if (chunk == null) { return; }
+        recalcChunkLoadState(chunk);
+    }
+
     @EventHandler
     public void onMinecartMove(VehicleMoveEvent event) {
         if (configManager.getDisableMinecarts()) {
@@ -364,10 +370,10 @@ public class EventHandlers implements Listener {
     @EventHandler
     public void onChunkLoad(ChunkLoadEvent event) {
         ChunkSnapshot snapshot = event.getChunk().getChunkSnapshot(true, false, false);
-        scanChunkSnapshotAsync(snapshot);
+        scanChunkSnapshotAsync(snapshot, true);
     }
 
-    public void scanChunkSnapshotAsync(ChunkSnapshot chunkSnapshot) {
+    public void scanChunkSnapshotAsync(ChunkSnapshot chunkSnapshot, boolean chunkLoadedAssured) {
         Runnable runnable = () -> {
             // count observers
             int observersCounter = 0;
@@ -383,7 +389,19 @@ public class EventHandlers implements Listener {
                 }
             }
             Trio<Integer, Integer, String> chunkKey = ChunkWithKey.getChunkKey(chunkSnapshot);
-            this.observersCounter.put(chunkKey, observersCounter);
+
+            if (observersCounter > 0) {
+                this.observersCounter.put(chunkKey, observersCounter);
+                loadedChunks.add(chunkKey);
+
+                if (!chunkLoadedAssured) {
+                    // check and load chunk in main thread
+                    scheduler.runTask(this.plugin, () -> this.recalcChunkLoadStateByKey(chunkKey));
+                }
+            } else {
+                this.observersCounter.remove(chunkKey);
+                reviewRemovedLoadedChunk(chunkKey);
+            }
         };
 
         scheduler.runTaskAsynchronously(plugin, runnable);
@@ -391,7 +409,6 @@ public class EventHandlers implements Listener {
 
     public void updateChunkTTL(ChunkWithKey chunk) {
         Trio<Integer, Integer, String> chunkKey = chunk.getChunkKey();
-        chunk.getWorld().getName();
         temporaryLoadedChunks.put(chunkKey, System.currentTimeMillis() + configManager.getUnloadDelay());
         loadedChunks.add(chunkKey);
         recalcChunkLoadState(chunk);
@@ -430,5 +447,36 @@ public class EventHandlers implements Listener {
 
     public void resetCooldown() {
         lastCooldownTime = 0L;
+    }
+
+    public Backup getBackupData() {
+        return new Backup(
+                observersCounter.keySet().toArray(new Trio[0]),
+                temporaryLoadedChunks.keySet().toArray(new Trio[0])
+        );
+    }
+
+    public void applyBackupData(Backup backup) {
+        Server server = plugin.getServer();
+        // load observers
+        for (Trio<Integer, Integer, String> chunkKeyWithObservers : backup.observers) {
+            ChunkWithKey chunk = ChunkWithKey.getChunkByKey(server, chunkKeyWithObservers);
+            if (chunk == null) {
+                continue;
+            }
+            this.scanChunkSnapshotAsync(
+                    chunk.getChunkSnapshot(true, false, false),
+                    false
+            );
+        }
+
+        // load temporary
+        for (Trio<Integer, Integer, String> chunkKeyWithObservers : backup.observers) {
+            ChunkWithKey chunk = ChunkWithKey.getChunkByKey(server, chunkKeyWithObservers);
+            if (chunk == null) {
+                continue;
+            }
+            updateChunkTTL(chunk);
+        }
     }
 }

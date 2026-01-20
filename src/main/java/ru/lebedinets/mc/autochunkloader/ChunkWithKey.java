@@ -1,9 +1,7 @@
 package ru.lebedinets.mc.autochunkloader;
 
 import io.arxila.javatuples.Trio;
-import org.bukkit.Chunk;
-import org.bukkit.ChunkSnapshot;
-import org.bukkit.Location;
+import org.bukkit.*;
 
 import java.util.Objects;
 
@@ -52,5 +50,17 @@ public interface ChunkWithKey extends Chunk {
      */
     static Trio<Integer, Integer, String> getChunkKey(int x, int z, String world) {
         return new Trio<>(x, z, world);
+    }
+
+    static ChunkWithKey getChunkByKey(Server server, Trio<Integer, Integer, String> key) {
+        String worldName = key.value2();
+        World world = server.getWorld(worldName);
+        if (world == null) {
+            return null;
+        }
+
+        int chunkX = key.value0();
+        int chunkZ = key.value1();
+        return (ChunkWithKey) world.getChunkAt(chunkX, chunkZ);
     }
 }

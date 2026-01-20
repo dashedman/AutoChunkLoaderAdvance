@@ -22,9 +22,11 @@ public final class AutoChunkLoader extends JavaPlugin {
 
         eventHandlers = new EventHandlers(this, configManager, scheduler);
         getServer().getPluginManager().registerEvents(eventHandlers, this);
+        loadBackup();
 
         // Schedule a repeating task to check and unload chunks without minecarts
         scheduler.scheduleSyncRepeatingTask(this, eventHandlers::unloadExpiredChunks, 0, configManager.getUnloadPeriod());
+        scheduler.scheduleSyncRepeatingTask(this, this::saveBackup, configManager.getBackupPeriod(), configManager.getBackupPeriod());
 
         Commands commands = new Commands(this, configManager, eventHandlers);
         Objects.requireNonNull(getCommand("acl")).setExecutor(commands);
@@ -38,6 +40,25 @@ public final class AutoChunkLoader extends JavaPlugin {
     @Override
     public void onDisable() {
         // Plugin shutdown logic
+        saveBackup();
         getLogger().info("AutoChunkLoader has been stopped!");
+    }
+
+    public void saveBackup() {
+        getLogger().info("Start backup AutoChunkLoader!");
+        Backup backup = eventHandlers.getBackupData();
+        backup.dump(this);
+    }
+
+    public void loadBackup() {
+        Backup backup = Backup.load(this);
+        if (backup == null) {
+            getLogger().info("Backup is empty.");
+            return;
+        }
+
+        getLogger().info("Loading Backup...");
+        eventHandlers.applyBackupData(backup);
+        getLogger().info("Backup loaded!");
     }
 }

@@ -7,6 +7,7 @@ debugLog: false # Enable to find where is "lag machine"
 unloadDelay: 30000 # Delay how long force loaded chunks should be loaded (in milliseconds)
 unloadPeriod: 20 # How often to try unloading chunks (in ticks)
 warningCooldown: 30000 # Limit reach repeat cooldown (in milliseconds)
+backupPeriod: 120000 # Backup period (in milliseconds)
 disableWarnings: false
 disableRedstone: false
 disableMinecarts: false
