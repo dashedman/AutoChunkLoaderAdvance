@@ -7,7 +7,7 @@ import org.bukkit.scheduler.BukkitScheduler;
 
 import java.util.Objects;
 
-public final class AutoChunkLoader extends JavaPlugin {
+public final class AutoChunkLoaderAdvance extends JavaPlugin {
 
     private ConfigManager configManager;
     private EventHandlers eventHandlers;
@@ -15,7 +15,7 @@ public final class AutoChunkLoader extends JavaPlugin {
     @Override
     public void onEnable() {
         // Plugin startup logic
-        getLogger().info("AutoChunkLoader has been started!");
+        getLogger().info("AutoChunkLoaderAdvance has been started!");
 
         configManager = new ConfigManager(this);
         BukkitScheduler scheduler = Bukkit.getScheduler();
@@ -41,11 +41,11 @@ public final class AutoChunkLoader extends JavaPlugin {
     public void onDisable() {
         // Plugin shutdown logic
         saveBackup();
-        getLogger().info("AutoChunkLoader has been stopped!");
+        getLogger().info("AutoChunkLoaderAdvance has been stopped!");
     }
 
     public void saveBackup() {
-        getLogger().info("Start backup AutoChunkLoader!");
+        getLogger().info("Start backup AutoChunkLoaderAdvance!");
         Backup backup = eventHandlers.getBackupData();
         backup.dump(this);
     }

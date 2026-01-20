@@ -1,4 +1,4 @@
-# ![logo](https://i.imgur.com/0UFlvHt.png) AutoChunkLoaderAdvanced
+# ![logo](https://i.imgur.com/0UFlvHt.png) AutoChunkLoaderAdvance
 
 _Fork of [AutoChunkLoader](https://github.com/mlebdmcdev/AutoChunkLoader) cause it has some bug, 
 and doesn't support observers and hoppers._
@@ -16,6 +16,6 @@ Installation:
  - Download jar file
  - Put this file into `/plugins` folder of your Spigot server
  - Restart server
- - Modify `/plugins/AutoChunkLoader/config.yml` file for your needs
+ - Modify `/plugins/AutoChunkLoaderAdvance/config.yml` file for your needs
 
-[![stats](https://bstats.org/signatures/bukkit/AutoChunkLoader.svg)](https://bstats.org/plugin/bukkit/AutoChunkLoader/19552)
+[![stats](https://bstats.org/signatures/bukkit/AutoChunkLoaderAdvance.svg)](https://bstats.org/plugin/bukkit/AutoChunkLoaderAdvance/19552)

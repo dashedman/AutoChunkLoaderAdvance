@@ -16,7 +16,11 @@ public interface ChunkWithKey extends Chunk {
      * @return The Chunks X and Z coordinates with world name
      */
     default Trio<Integer, Integer, String> getChunkKey() {
-        return getChunkKey(getX(), getZ(), getWorld().getName());
+        return getChunkKey(this);
+    }
+
+    static Trio<Integer, Integer, String> getChunkKey(Chunk chunk) {
+        return getChunkKey(chunk.getX(), chunk.getZ(), chunk.getWorld().getName());
     }
 
     /**
@@ -52,7 +56,7 @@ public interface ChunkWithKey extends Chunk {
         return new Trio<>(x, z, world);
     }
 
-    static ChunkWithKey getChunkByKey(Server server, Trio<Integer, Integer, String> key) {
+    static Chunk getChunkByKey(Server server, Trio<Integer, Integer, String> key) {
         String worldName = key.value2();
         World world = server.getWorld(worldName);
         if (world == null) {
@@ -61,6 +65,6 @@ public interface ChunkWithKey extends Chunk {
 
         int chunkX = key.value0();
         int chunkZ = key.value1();
-        return (ChunkWithKey) world.getChunkAt(chunkX, chunkZ);
+        return world.getChunkAt(chunkX, chunkZ);
     }
 }

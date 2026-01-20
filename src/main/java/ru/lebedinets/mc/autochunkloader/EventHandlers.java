@@ -55,7 +55,7 @@ public class EventHandlers implements Listener {
                 // Notify ops
                 for (Player op : Bukkit.getOnlinePlayers()) {
                     if (op.isOp()) {
-                        op.sendMessage(ChatColor.RED + "[AutoChunkLoader] Force loaded chunks limit reached! (" +
+                        op.sendMessage(ChatColor.RED + "[AutoChunkLoaderAdvance] Force loaded chunks limit reached! (" +
                                 configManager.getMaxLoadedChunks() + ")");
                     }
                 }
@@ -87,11 +87,11 @@ public class EventHandlers implements Listener {
         loadedChunks.remove(chunkKey);
     }
 
-    private void recalcChunkLoadState(ChunkWithKey chunk) {
+    private void recalcChunkLoadState(Chunk chunk) {
         boolean currentForce = chunk.isForceLoaded();
 
         // check temporary chunks
-        boolean shouldBeForce = loadedChunks.contains(chunk.getChunkKey());
+        boolean shouldBeForce = loadedChunks.contains(ChunkWithKey.getChunkKey(chunk));
         if (shouldBeForce != currentForce) {
             // something changed
             chunk.setForceLoaded(shouldBeForce);
@@ -111,7 +111,7 @@ public class EventHandlers implements Listener {
     }
 
     private void recalcChunkLoadStateByKey(Trio<Integer, Integer, String> chunkKey) {
-        ChunkWithKey chunk = ChunkWithKey.getChunkByKey(plugin.getServer(), chunkKey);
+        Chunk chunk = ChunkWithKey.getChunkByKey(plugin.getServer(), chunkKey);
         if (chunk == null) { return; }
         recalcChunkLoadState(chunk);
     }
@@ -129,8 +129,7 @@ public class EventHandlers implements Listener {
         int chunkLoadRadius = configManager.getChunkLoadRadius();
         long unloadDelay = configManager.getUnloadDelay();
 
-        if (event.getVehicle() instanceof Minecart) {
-            Minecart minecart = (Minecart) event.getVehicle();
+        if (event.getVehicle() instanceof Minecart minecart) {
 
             // Do not load chunks when minecart has a player
             if (!minecart.getPassengers().isEmpty()) {
@@ -161,7 +160,7 @@ public class EventHandlers implements Listener {
                     int targetX = chunk.getX() + x;
                     int targetZ = chunk.getZ() + z;
 
-                    ChunkWithKey targetChunk = (ChunkWithKey) world.getChunkAt(targetX, targetZ);
+                    Chunk targetChunk = world.getChunkAt(targetX, targetZ);
                     updateChunkTTL(targetChunk);
                 }
             }
@@ -199,7 +198,7 @@ public class EventHandlers implements Listener {
                 int targetX = centerChunk.getX() + x;
                 int targetZ = centerChunk.getZ() + z;
 
-                ChunkWithKey targetChunk = (ChunkWithKey) world.getChunkAt(targetX, targetZ);
+                 Chunk targetChunk = world.getChunkAt(targetX, targetZ);
                 updateChunkTTL(targetChunk);
             }
         }
@@ -245,8 +244,8 @@ public class EventHandlers implements Listener {
                 int targetX = chunk.getX() + x;
                 int targetZ = chunk.getZ() + z;
 
-                ChunkWithKey targetChunk = (ChunkWithKey) world.getChunkAt(targetX, targetZ);
-                Trio<Integer, Integer, String> targetChunkKey = targetChunk.getChunkKey();
+                 Chunk targetChunk = world.getChunkAt(targetX, targetZ);
+                Trio<Integer, Integer, String> targetChunkKey = ChunkWithKey.getChunkKey(targetChunk);
 
                 Integer counter = observersCounter.get(targetChunkKey);
                 if (counter == null) {
@@ -271,8 +270,8 @@ public class EventHandlers implements Listener {
                 int targetX = chunk.getX() + x;
                 int targetZ = chunk.getZ() + z;
 
-                ChunkWithKey targetChunk = (ChunkWithKey) world.getChunkAt(targetX, targetZ);
-                Trio<Integer, Integer, String> targetChunkKey = targetChunk.getChunkKey();
+                 Chunk targetChunk = world.getChunkAt(targetX, targetZ);
+                Trio<Integer, Integer, String> targetChunkKey = ChunkWithKey.getChunkKey(targetChunk);
 
                 Integer counter = observersCounter.getOrDefault(targetChunkKey, 0);
                 counter--;
@@ -360,7 +359,7 @@ public class EventHandlers implements Listener {
                     int targetX = centerChunk.getX() + x;
                     int targetZ = centerChunk.getZ() + z;
 
-                    ChunkWithKey targetChunk = (ChunkWithKey) world.getChunkAt(targetX, targetZ);
+                     Chunk targetChunk = world.getChunkAt(targetX, targetZ);
                     updateChunkTTL(targetChunk);
                 }
             }
@@ -407,8 +406,8 @@ public class EventHandlers implements Listener {
         scheduler.runTaskAsynchronously(plugin, runnable);
     }
 
-    public void updateChunkTTL(ChunkWithKey chunk) {
-        Trio<Integer, Integer, String> chunkKey = chunk.getChunkKey();
+    public void updateChunkTTL(Chunk chunk) {
+        Trio<Integer, Integer, String> chunkKey = ChunkWithKey.getChunkKey(chunk);
         temporaryLoadedChunks.put(chunkKey, System.currentTimeMillis() + configManager.getUnloadDelay());
         loadedChunks.add(chunkKey);
         recalcChunkLoadState(chunk);
@@ -435,7 +434,7 @@ public class EventHandlers implements Listener {
                     continue;
                 }
 
-                ChunkWithKey chunk = (ChunkWithKey) world.getChunkAt(chunkX, chunkZ);
+                Chunk chunk = world.getChunkAt(chunkX, chunkZ);
                 recalcChunkLoadState(chunk);
             }
         }
@@ -460,7 +459,7 @@ public class EventHandlers implements Listener {
         Server server = plugin.getServer();
         // load observers
         for (Trio<Integer, Integer, String> chunkKeyWithObservers : backup.observers) {
-            ChunkWithKey chunk = ChunkWithKey.getChunkByKey(server, chunkKeyWithObservers);
+            Chunk chunk = ChunkWithKey.getChunkByKey(server, chunkKeyWithObservers);
             if (chunk == null) {
                 continue;
             }
@@ -472,7 +471,7 @@ public class EventHandlers implements Listener {
 
         // load temporary
         for (Trio<Integer, Integer, String> chunkKeyWithObservers : backup.observers) {
-            ChunkWithKey chunk = ChunkWithKey.getChunkByKey(server, chunkKeyWithObservers);
+            Chunk chunk = ChunkWithKey.getChunkByKey(server, chunkKeyWithObservers);
             if (chunk == null) {
                 continue;
             }

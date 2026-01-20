@@ -1,8 +1,8 @@
-name: AutoChunkLoader
+name: AutoChunkLoaderAdvance
 version: '${project.version}'
-main: ru.lebedinets.mc.autochunkloader.AutoChunkLoader
+main: ru.lebedinets.mc.autochunkloader.AutoChunkLoaderAdvance
 api-version: 1.13
-prefix: AutoChunkLoader
+prefix: AutoChunkLoaderAdvance
 authors: [dashedman, Mikhail Lebedinets]
 description: A simple plugin that loads chunks around long railways and redstone signals
 website: https://github.com/dashedman/AutoChunkLoaderAdvance
@@ -10,25 +10,25 @@ commands:
   autochunkloader:
     aliases: [acl]
     permission: autochunkloader.use
-    description: AutoChunkLoader Plugin
+    description: AutoChunkLoaderAdvance Plugin
     usage: /<command> [reloadconfig|resetcooldown|stats]
     subcommands:
       reloadconfig:
         aliases: [recfg, re]
-        description: Reload the AutoChunkLoader plugin configuration
+        description: Reload the AutoChunkLoaderAdvance plugin configuration
         usage: /<command> reloadconfig
         permission: autochunkloader.reloadconfig
       resetcooldown:
         aliases: [resetcd, recd, re]
-        description: Reset warning cooldown for AutoChunkLoader plugin
+        description: Reset warning cooldown for AutoChunkLoaderAdvance plugin
         usage: /<command> resetcooldown
         permission: autochunkloader.resetcooldown
       stats:
         aliases: [stats, stat, st, s]
-        description: Show current force loaded chunks by AutoChunkLoader plugin
+        description: Show current force loaded chunks by AutoChunkLoaderAdvance plugin
         usage: /<command> stats
         permission: autochunkloader.showstats
       about:
         aliases: [ab, a]
-        description: About AutoChunkLoader plugin
+        description: About AutoChunkLoaderAdvance plugin
         usage: /<command> about

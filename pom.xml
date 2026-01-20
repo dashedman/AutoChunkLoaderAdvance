@@ -5,18 +5,19 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>ru.lebedinets.mc</groupId>
-    <artifactId>AutoChunkLoader</artifactId>
-    <version>1.0.1</version>
+    <artifactId>AutoChunkLoaderAdvance</artifactId>
+    <version>2.0.3</version>
     <packaging>jar</packaging>
 
-    <name>AutoChunkLoader</name>
+    <name>AutoChunkLoaderAdvance</name>
 
-    <description>A simple plugin that loads chunks around long railways and redstone signals</description>
+    <description>A simple plugin that loads chunks around long railways and redstone signals,
+        and keep chunks with observers (farms and flying machines) and working hoppers (pipes and timers).</description>
     <properties>
         <java.version>1.8</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
-    <url>https://github.com/iwalfy/AutoChunkLoader</url>
+    <url>https://github.com/dashedman/AutoChunkLoaderAdvance</url>
 
     <build>
         <plugins>
@@ -25,14 +26,14 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.8.1</version>
                 <configuration>
-                    <source>${java.version}</source>
-                    <target>${java.version}</target>
+                    <source>17</source>
+                    <target>17</target>
                 </configuration>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>3.2.1</version>
+                <version>3.6.1</version>
                 <configuration>
                     <relocations>
                         <relocation>
@@ -90,6 +91,7 @@
             <groupId>io.arxila.javatuples</groupId>
             <artifactId>javatuples</artifactId>
             <version>2.0.1</version>
+            <scope>compile</scope>
         </dependency>
     </dependencies>
 </project>

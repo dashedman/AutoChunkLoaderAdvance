@@ -1,5 +1,4 @@
-# Configuration for AutoChunkLoader
-# https://github.com/iwalfy/AutoChunkLoader/wiki
+# Configuration for AutoChunkLoaderAdvance
 
 chunkLoadRadius: 1 # How many chunks should be loaded around minecart/redstone signal (should be > 0)
 maxLoadedChunks: 1000 # How many chunks can be force loaded
