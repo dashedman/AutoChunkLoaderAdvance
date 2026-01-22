@@ -66,7 +66,12 @@ public class Commands implements CommandExecutor, TabCompleter {
                     case "st":
                     case "s":
                         if (sender.hasPermission("autochunkloader.stats")) {
-                            sender.sendMessage(ChatColor.GREEN + "Total loaded chunks: " + eventHandlers.getLoadedChunksCount() + "/" + configManager.getMaxLoadedChunks());
+                            sender.sendMessage(
+                                    ChatColor.GREEN + "Total loaded chunks: " +
+                                            eventHandlers.getLoadedChunksCount() + "/" + configManager.getMaxLoadedChunks() +
+                                            "(temp: " + eventHandlers.getTemporaryLoadedChunksCount() +
+                                            ", obs: " + eventHandlers.getLoadedChunksByObserversCount() + ")"
+                                    );
                         } else {
                             sender.sendMessage(ChatColor.RED + "You don't have permission to use this command.");
                         }

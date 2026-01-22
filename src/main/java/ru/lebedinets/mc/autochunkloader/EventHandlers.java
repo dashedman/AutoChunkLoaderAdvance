@@ -20,10 +20,8 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitScheduler;
 import org.bukkit.util.Vector;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public class EventHandlers implements Listener {
     private final Plugin plugin;
@@ -31,9 +29,6 @@ public class EventHandlers implements Listener {
     private final BukkitScheduler scheduler;
 
     private long lastCooldownTime = 0L;
-    private final Set<Trio<Integer, Integer, String>> loadedChunks = new HashSet<>();
-    private final Map<Trio<Integer, Integer, String>, Long> temporaryLoadedChunks = new HashMap<>();
-    private final Map<Trio<Integer, Integer, String>, Integer> observersCounter = new HashMap<>();
 
     public EventHandlers(Plugin plugin, ConfigManager configMgr, BukkitScheduler scheduler) {
         this.plugin = plugin;
@@ -85,29 +80,6 @@ public class EventHandlers implements Listener {
             return;
         }
         loadedChunks.remove(chunkKey);
-    }
-
-    private void recalcChunkLoadState(Chunk chunk) {
-        boolean currentForce = chunk.isForceLoaded();
-
-        // check temporary chunks
-        boolean shouldBeForce = loadedChunks.contains(ChunkWithKey.getChunkKey(chunk));
-        if (shouldBeForce != currentForce) {
-            // something changed
-            chunk.setForceLoaded(shouldBeForce);
-
-            if (shouldBeForce) {
-                // load chunk
-                if (!chunk.isLoaded()) {
-                    chunk.load();
-                }
-            } else {
-                // chunk will be unloaded
-                if (configManager.getDebugLog()) {
-                    plugin.getLogger().info("Unloading chunk (" + chunk.getX() + ", " + chunk.getZ() + ")...");
-                }
-            }
-        }
     }
 
     private void recalcChunkLoadStateByKey(Trio<Integer, Integer, String> chunkKey) {
@@ -390,6 +362,12 @@ public class EventHandlers implements Listener {
             Trio<Integer, Integer, String> chunkKey = ChunkWithKey.getChunkKey(chunkSnapshot);
 
             if (observersCounter > 0) {
+                if (configManager.getDebugLog()) {
+                    plugin.getLogger().info(
+                            "Detected chunk [" + chunkSnapshot.getX() + "," + chunkSnapshot.getZ() + "] with observers: " + observersCounter
+                    );
+                }
+
                 this.observersCounter.put(chunkKey, observersCounter);
                 loadedChunks.add(chunkKey);
 
@@ -415,33 +393,28 @@ public class EventHandlers implements Listener {
 
     public void unloadExpiredChunks() {
         long currentTime = System.currentTimeMillis();
-        for (Map.Entry<Trio<Integer, Integer, String>, Long> entry : temporaryLoadedChunks.entrySet()) {
-            long expirationTime = entry.getValue();
 
-            if (currentTime >= expirationTime) {
-                Trio<Integer, Integer, String> chunkKey = entry.getKey();
+        List<Trio<Integer, Integer, String>> expiredKeys = temporaryLoadedChunks.entrySet().stream()
+                .filter(entry -> currentTime >= entry.getValue())
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
 
-                temporaryLoadedChunks.remove(chunkKey);
-                reviewRemovedLoadedChunk(chunkKey);
-
-                int chunkX = chunkKey.value0();
-                int chunkZ = chunkKey.value1();
-                String chunkWorldName = chunkKey.value2();
-
-                World world = plugin.getServer().getWorld(chunkWorldName);
-                if (world == null) {
-                    // world not exist, ignore
-                    continue;
-                }
-
-                Chunk chunk = world.getChunkAt(chunkX, chunkZ);
-                recalcChunkLoadState(chunk);
-            }
+        for (Trio<Integer, Integer, String> chunkKey : expiredKeys) {
+            temporaryLoadedChunks.remove(chunkKey);
+            reviewRemovedLoadedChunk(chunkKey);
+            recalcChunkLoadStateByKey(chunkKey);
         }
     }
 
     public int getLoadedChunksCount() {
         return loadedChunks.size();
+    }
+
+    public int getTemporaryLoadedChunksCount() {
+        return temporaryLoadedChunks.size();
+    }
+    public int getLoadedChunksByObserversCount() {
+        return observersCounter.size();
     }
 
     public void resetCooldown() {
