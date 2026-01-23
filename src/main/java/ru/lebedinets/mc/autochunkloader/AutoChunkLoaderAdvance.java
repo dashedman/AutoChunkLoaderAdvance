@@ -9,31 +9,29 @@ import java.util.Objects;
 
 public final class AutoChunkLoaderAdvance extends JavaPlugin {
 
-    private ConfigManager configManager;
     private ChunkManager chunkManager;
-    private EventHandlers eventHandlers;
 
     @Override
     public void onEnable() {
         // Plugin startup logic
         getLogger().info("AutoChunkLoaderAdvance has been started!");
 
-        configManager = new ConfigManager(this);
+        ConfigManager configManager = new ConfigManager(this);
         BukkitScheduler scheduler = Bukkit.getScheduler();
 
         chunkManager = new ChunkManager(
                 this, scheduler, configManager
         );
 
-        eventHandlers = new EventHandlers(this, configManager, chunkManager);
+        EventHandlers eventHandlers = new EventHandlers(this, configManager, chunkManager);
         getServer().getPluginManager().registerEvents(eventHandlers, this);
         loadBackup();
 
         // Schedule a repeating task to check and unload chunks without minecarts
-        scheduler.scheduleSyncRepeatingTask(this, chunkManager::unloadExpiredChunks, 0, configManager.getUnloadPeriod());
-        scheduler.scheduleSyncRepeatingTask(this, this::saveBackup, configManager.getBackupPeriod(), configManager.getBackupPeriod());
+        scheduler.runTaskTimerAsynchronously(this, chunkManager::unloadExpiredChunks, 0, configManager.getUnloadPeriod());
+        scheduler.runTaskTimerAsynchronously(this, this::saveBackup, configManager.getBackupPeriod(), configManager.getBackupPeriod());
 
-        Commands commands = new Commands(this, configManager, eventHandlers);
+        Commands commands = new Commands(this, configManager, chunkManager, eventHandlers);
         Objects.requireNonNull(getCommand("acl")).setExecutor(commands);
         Objects.requireNonNull(getCommand("autochunkloader")).setExecutor(commands);
 

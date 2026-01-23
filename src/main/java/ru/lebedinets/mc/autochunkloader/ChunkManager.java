@@ -27,9 +27,9 @@ public class ChunkManager {
     private final Map<Trio<Integer, Integer, String>, Integer> observersCounter = new HashMap<>();
     private final Map<Trio<Integer, Integer, String>, BukkitTask> loadingTasks = new HashMap<>();
 
-    private Plugin plugin;
-    private BukkitScheduler scheduler;
-    private ConfigManager configManager;
+    private final Plugin plugin;
+    private final BukkitScheduler scheduler;
+    private final ConfigManager configManager;
 
     public ChunkManager(Plugin plugin, BukkitScheduler scheduler, ConfigManager configManager) {
         this.plugin = plugin;
@@ -40,6 +40,10 @@ public class ChunkManager {
     public void reloadConfig() {
         this.updateAllChunksTTL();
         this.recalcPivots();
+    }
+
+    public boolean shouldBeLoaded(Trio<Integer, Integer, String> chunkKey) {
+        return loadedChunks.containsKey(chunkKey);
     }
 
     public void incrementObserversInChunk(Trio<Integer, Integer, String> chunkKey) {

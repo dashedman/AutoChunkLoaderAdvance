@@ -10,6 +10,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.*;
+import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.vehicle.VehicleMoveEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
@@ -267,6 +268,27 @@ public class EventHandlers implements Listener {
     public void onChunkLoad(ChunkLoadEvent event) {
         ChunkSnapshot snapshot = event.getChunk().getChunkSnapshot(true, false, false);
         chunkManager.scanChunkSnapshotAsync(snapshot);
+    }
+
+    @EventHandler
+    public void onCreatureSpawnEvent(CreatureSpawnEvent event) {
+        double spawnRatio = configManager.getSpawnRatio();
+        if (spawnRatio == 1.0) {
+            return;
+        }
+
+        CreatureSpawnEvent.SpawnReason reason = event.getSpawnReason();
+        if (
+                reason == CreatureSpawnEvent.SpawnReason.DEFAULT ||
+                reason == CreatureSpawnEvent.SpawnReason.NATURAL
+        ) {
+            Chunk chunk = event.getLocation().getChunk();
+            if (chunkManager.shouldBeLoaded(ChunkWithKey.getChunkKey(chunk))) {
+                if (Math.random() > spawnRatio) {
+                    event.setCancelled(true);
+                }
+            }
+        }
     }
 
     public int getLoadedChunksCount() {

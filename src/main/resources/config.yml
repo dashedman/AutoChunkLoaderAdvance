@@ -1,12 +1,13 @@
 # Configuration for AutoChunkLoaderAdvance
 
-chunkLoadRadius: 1 # How many chunks should be loaded around minecart/redstone signal (should be > 0)
+chunkLoadRadius: 1 # How many chunks should be loaded around minecart/redstone signal (should be >= 0)
 maxLoadedChunks: 1000 # How many chunks can be force loaded
 debugLog: false # Enable to find where is "lag machine"
 unloadDelay: 30000 # Delay how long force loaded chunks should be loaded (in milliseconds)
 unloadPeriod: 20 # How often to try unloading chunks (in ticks)
 warningCooldown: 30000 # Limit reach repeat cooldown (in milliseconds)
 backupPeriod: 120000 # Backup period (in milliseconds)
+spawnRatio: 0 # Spawn ratio for natural spawn in force loaded chunks (0 <= ratio <= 1, 0 - cancel all spawns, 1 - pass all spawns)
 disableWarnings: false
 disableRedstone: false
 disableMinecarts: false

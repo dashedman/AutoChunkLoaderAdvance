@@ -15,16 +15,19 @@ public class Commands implements CommandExecutor, TabCompleter {
 
     private final Plugin plugin;
     private final ConfigManager configManager;
+    private final ChunkManager chunkManager;
     private final EventHandlers eventHandlers;
 
-    public Commands(Plugin plugin, ConfigManager configMgr, EventHandlers eventHndl) {
+    public Commands(Plugin plugin, ConfigManager configMgr, ChunkManager chunkManager, EventHandlers eventHndl) {
         this.plugin = plugin;
         this.configManager = configMgr;
+        this.chunkManager = chunkManager;
         this.eventHandlers = eventHndl;
     }
 
     private void reloadConfiguration(CommandSender sender) {
         configManager.reloadConfig();
+        chunkManager.reloadConfig();
         sender.sendMessage(ChatColor.GREEN + "Configuration reloaded.");
     }
 

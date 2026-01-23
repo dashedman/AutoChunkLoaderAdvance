@@ -19,6 +19,7 @@ public class ConfigManager {
     private int unloadPeriod = 20; // Period in ticks (each second)
     private long warningCooldown = 30000L; // Cooldown after showing warning
     private long backupPeriod = 120000L; // Backup period
+    private double spawnRatio = 0; // Spawn ratio for natural spawn in force loaded chunks (0 <= ratio <= 1, 0 - cancel all spawns, 1 - pass all spawns)
     private boolean disableWarnings = false;
     private boolean disableRedstone = false;
     private boolean disableObservers = false;
@@ -41,13 +42,14 @@ public class ConfigManager {
 
         addMissingConfigLines(config, Objects.requireNonNull(plugin.getConfig().getDefaults()));
 
-        chunkLoadRadius = config.getInt("chunkLoadRadius");
+        chunkLoadRadius = Math.max(0, config.getInt("chunkLoadRadius"));
         maxLoadedChunks = config.getInt("maxLoadedChunks");
         debugLog = config.getBoolean("debugLog");
         unloadDelay = config.getLong("unloadDelay");
         unloadPeriod = config.getInt("unloadPeriod");
         warningCooldown = config.getLong("warningCooldown");
         backupPeriod = config.getLong("backupPeriod");
+        spawnRatio = Math.max(0, Math.min(1, config.getDouble("spawnRatio")));
         disableWarnings = config.getBoolean("disableWarnings");
         disableRedstone = config.getBoolean("disableRedstone");
         disableObservers = config.getBoolean("disableObservers");
@@ -124,5 +126,9 @@ public class ConfigManager {
 
     public Set<String> getWorlds() {
         return worlds;
+    }
+
+    public double getSpawnRatio() {
+        return spawnRatio;
     }
 }
