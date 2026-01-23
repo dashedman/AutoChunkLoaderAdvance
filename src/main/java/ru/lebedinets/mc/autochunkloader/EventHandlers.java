@@ -3,7 +3,6 @@ package ru.lebedinets.mc.autochunkloader;
 import io.arxila.javatuples.Trio;
 import org.bukkit.*;
 import org.bukkit.block.Block;
-import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.type.Observer;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Minecart;
@@ -17,23 +16,31 @@ import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.inventory.BlockInventoryHolder;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.plugin.Plugin;
-import org.bukkit.scheduler.BukkitScheduler;
 import org.bukkit.util.Vector;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 public class EventHandlers implements Listener {
     private final Plugin plugin;
     private final ConfigManager configManager;
-    private final BukkitScheduler scheduler;
+    private final ChunkManager chunkManager;
 
     private long lastCooldownTime = 0L;
 
-    public EventHandlers(Plugin plugin, ConfigManager configMgr, BukkitScheduler scheduler) {
+    public EventHandlers(Plugin plugin, ConfigManager configMgr, ChunkManager chunkManager) {
         this.plugin = plugin;
         this.configManager = configMgr;
-        this.scheduler = scheduler;
+        this.chunkManager = chunkManager;
+    }
+
+    private void debugLog(String log) {
+        if (configManager.getDebugLog()) {
+            plugin.getLogger().info(log);
+        }
+    }
+
+    private boolean checkLimits(World world) {
+        return checkChunkLimit() && isWorldAllowed(world);
     }
 
     private boolean checkChunkLimit() {
@@ -73,21 +80,6 @@ public class EventHandlers implements Listener {
         return worldFilterMode.equals("blacklist") && !worlds.contains(worldName);
     }
 
-    private void reviewRemovedLoadedChunk(Trio<Integer, Integer, String> chunkKey) {
-        // chunk was removed from secondary registry
-        // check and remove it from general registry
-        if (temporaryLoadedChunks.containsKey(chunkKey) || observersCounter.containsKey(chunkKey)) {
-            return;
-        }
-        loadedChunks.remove(chunkKey);
-    }
-
-    private void recalcChunkLoadStateByKey(Trio<Integer, Integer, String> chunkKey) {
-        Chunk chunk = ChunkWithKey.getChunkByKey(plugin.getServer(), chunkKey);
-        if (chunk == null) { return; }
-        recalcChunkLoadState(chunk);
-    }
-
     @EventHandler
     public void onMinecartMove(VehicleMoveEvent event) {
         if (configManager.getDisableMinecarts()) {
@@ -98,14 +90,12 @@ public class EventHandlers implements Listener {
             return;
         }
 
-        int chunkLoadRadius = configManager.getChunkLoadRadius();
-        long unloadDelay = configManager.getUnloadDelay();
-
         if (event.getVehicle() instanceof Minecart minecart) {
 
             // Do not load chunks when minecart has a player
-            if (!minecart.getPassengers().isEmpty()) {
-                Entity passenger = minecart.getPassengers().get(0);
+            List<Entity> passengers = minecart.getPassengers();
+            if (!passengers.isEmpty()) {
+                Entity passenger = passengers.get(0);
                 if (passenger instanceof Player) {
                     return;
                 }
@@ -115,26 +105,24 @@ public class EventHandlers implements Listener {
                 return;
             }
 
-            if (configManager.getDebugLog()) {
-                plugin.getLogger().info("Minecart signal detected at " + minecart.getLocation());
-            }
+            debugLog("Minecart signal detected at " + minecart.getLocation());
 
-            Chunk chunk = minecart.getLocation().getChunk();
-            World world = chunk.getWorld();
+            Chunk fromChunk = event.getFrom().getChunk();
+            Chunk toChunk = event.getTo().getChunk();
 
-            if (configManager.getDebugLog()) {
-                plugin.getLogger().info("Loading additional chunks...");
-            }
+            Trio<Integer, Integer, String> chunkKeyFrom = ChunkWithKey.getChunkKey(fromChunk);
+            Trio<Integer, Integer, String> chunkKeyTo = ChunkWithKey.getChunkKey(toChunk);
 
             // Load and set force-loaded for chunks around the minecart
-            for (int x = -chunkLoadRadius; x <= chunkLoadRadius; x++) {
-                for (int z = -chunkLoadRadius; z <= chunkLoadRadius; z++) {
-                    int targetX = chunk.getX() + x;
-                    int targetZ = chunk.getZ() + z;
-
-                    Chunk targetChunk = world.getChunkAt(targetX, targetZ);
-                    updateChunkTTL(targetChunk);
-                }
+            if (chunkKeyFrom.equals(chunkKeyTo)) {
+                // same chunk
+                chunkManager.updateChunkTTL(chunkKeyFrom);
+            } else {
+                debugLog("Loading additional chunks...");
+                // load new chunk
+                chunkManager.updateChunkTTL(chunkKeyTo);
+                // and erase old
+                chunkManager.expireChunkTTL(chunkKeyFrom);
             }
         }
     }
@@ -149,31 +137,18 @@ public class EventHandlers implements Listener {
             return;
         }
 
-        int chunkLoadRadius = configManager.getChunkLoadRadius();
-
         Block redstoneBlock = event.getBlock();
 
         if (!isWorldAllowed(redstoneBlock.getWorld())) {
             return;
         }
 
-        if (configManager.getDebugLog()) {
-            plugin.getLogger().info("Redstone signal detected at " + redstoneBlock.getLocation());
-        }
+        debugLog("Redstone signal detected at " + redstoneBlock.getLocation());
 
-        World world = redstoneBlock.getWorld();
-        Chunk centerChunk = redstoneBlock.getLocation().getChunk();
+        Chunk chunk = redstoneBlock.getLocation().getChunk();
 
         // Load and set force-loaded for chunks around the redstone block
-        for (int x = -chunkLoadRadius; x <= chunkLoadRadius; x++) {
-            for (int z = -chunkLoadRadius; z <= chunkLoadRadius; z++) {
-                int targetX = centerChunk.getX() + x;
-                int targetZ = centerChunk.getZ() + z;
-
-                 Chunk targetChunk = world.getChunkAt(targetX, targetZ);
-                updateChunkTTL(targetChunk);
-            }
-        }
+        chunkManager.updateChunkTTL(ChunkWithKey.getChunkKey(chunk));
     }
 
     @EventHandler
@@ -188,8 +163,12 @@ public class EventHandlers implements Listener {
                 return;
             }
 
+            debugLog("Observer set detected at " + block.getLocation());
+
             Chunk eventChunk = block.getLocation().getChunk();
-            addObserverToChunk(eventChunk);
+            chunkManager.incrementObserversInChunk(
+                    ChunkWithKey.getChunkKey(eventChunk)
+            );
         }
     }
 
@@ -201,60 +180,10 @@ public class EventHandlers implements Listener {
                 return;
             }
 
+            debugLog("Observer unset detected at " + block.getLocation());
+
             Chunk eventChunk = block.getLocation().getChunk();
-            removeObserverFromChunk(eventChunk);
-        }
-    }
-
-    public void addObserverToChunk(Chunk chunk) {
-        World world = chunk.getWorld();
-        int chunkLoadRadius = configManager.getChunkLoadRadius();
-
-        // Load and set force-loaded for chunks around the redstone block
-        for (int x = -chunkLoadRadius; x <= chunkLoadRadius; x++) {
-            for (int z = -chunkLoadRadius; z <= chunkLoadRadius; z++) {
-                int targetX = chunk.getX() + x;
-                int targetZ = chunk.getZ() + z;
-
-                 Chunk targetChunk = world.getChunkAt(targetX, targetZ);
-                Trio<Integer, Integer, String> targetChunkKey = ChunkWithKey.getChunkKey(targetChunk);
-
-                Integer counter = observersCounter.get(targetChunkKey);
-                if (counter == null) {
-                    observersCounter.put(targetChunkKey, 1);
-                    loadedChunks.add(targetChunkKey);
-                    recalcChunkLoadState(targetChunk);
-                } else {
-                    observersCounter.put(targetChunkKey, counter + 1);
-                }
-
-            }
-        }
-    }
-
-    public void removeObserverFromChunk(Chunk chunk) {
-        World world = chunk.getWorld();
-        int chunkLoadRadius = configManager.getChunkLoadRadius();
-
-        // Load and set force-loaded for chunks around the redstone block
-        for (int x = -chunkLoadRadius; x <= chunkLoadRadius; x++) {
-            for (int z = -chunkLoadRadius; z <= chunkLoadRadius; z++) {
-                int targetX = chunk.getX() + x;
-                int targetZ = chunk.getZ() + z;
-
-                 Chunk targetChunk = world.getChunkAt(targetX, targetZ);
-                Trio<Integer, Integer, String> targetChunkKey = ChunkWithKey.getChunkKey(targetChunk);
-
-                Integer counter = observersCounter.getOrDefault(targetChunkKey, 0);
-                counter--;
-                if (counter <= 0) {
-                    observersCounter.remove(targetChunkKey);
-                    reviewRemovedLoadedChunk(targetChunkKey);
-                    recalcChunkLoadState(targetChunk);
-                } else {
-                    observersCounter.put(targetChunkKey, counter);
-                }
-            }
+            chunkManager.decrementObserversInChunk(ChunkWithKey.getChunkKey(eventChunk));
         }
     }
 
@@ -266,6 +195,9 @@ public class EventHandlers implements Listener {
                 if (configManager.getDisableObservers()) {
                     continue;
                 }
+
+                debugLog("Observer piston push detected at " + block.getLocation());
+
                 processObserverMoving(block, moveDirection);
             }
         }
@@ -279,6 +211,9 @@ public class EventHandlers implements Listener {
                 if (configManager.getDisableObservers()) {
                     continue;
                 }
+
+                debugLog("Observer piston pull detected at " + block.getLocation());
+
                 processObserverMoving(block, moveDirection);
             }
         }
@@ -290,16 +225,20 @@ public class EventHandlers implements Listener {
         Location currLoc = observer.getLocation();
         Location nextLoc = currLoc.add(direction);
 
-        Chunk curentChunk = observer.getChunk();
-        Chunk nextChunk = observer.getWorld().getChunkAt(nextLoc);
+        Chunk fromChunk = observer.getChunk();
+        Chunk toChunk = observer.getWorld().getChunkAt(nextLoc);
 
-        if (nextChunk.equals(curentChunk)) {
+        Trio<Integer, Integer, String> chunkKeyFrom = ChunkWithKey.getChunkKey(fromChunk);
+        Trio<Integer, Integer, String> chunkKeyTo = ChunkWithKey.getChunkKey(toChunk);
+
+
+        if (chunkKeyFrom.equals(chunkKeyTo)) {
             // do nothing
             return;
         }
 
-        addObserverToChunk(nextChunk);
-        removeObserverFromChunk(curentChunk);
+        chunkManager.incrementObserversInChunk(chunkKeyTo);
+        chunkManager.decrementObserversInChunk(chunkKeyFrom);
     }
 
     @EventHandler
@@ -317,138 +256,31 @@ public class EventHandlers implements Listener {
                 return;
             }
 
-            if (configManager.getDebugLog()) {
-                plugin.getLogger().info("Hopper pass detected at " + block.getLocation());
-            }
+            debugLog("Hopper pass detected at " + block.getLocation());
 
-            World world = block.getWorld();
-            Chunk centerChunk = block.getLocation().getChunk();
-
-            int chunkLoadRadius = configManager.getChunkLoadRadius();
-            // Load and set force-loaded for chunks around the redstone block
-            for (int x = -chunkLoadRadius; x <= chunkLoadRadius; x++) {
-                for (int z = -chunkLoadRadius; z <= chunkLoadRadius; z++) {
-                    int targetX = centerChunk.getX() + x;
-                    int targetZ = centerChunk.getZ() + z;
-
-                     Chunk targetChunk = world.getChunkAt(targetX, targetZ);
-                    updateChunkTTL(targetChunk);
-                }
-            }
+            Chunk chunk = block.getLocation().getChunk();
+            chunkManager.updateChunkTTL(ChunkWithKey.getChunkKey(chunk));
         }
     }
 
     @EventHandler
     public void onChunkLoad(ChunkLoadEvent event) {
         ChunkSnapshot snapshot = event.getChunk().getChunkSnapshot(true, false, false);
-        scanChunkSnapshotAsync(snapshot, true);
-    }
-
-    public void scanChunkSnapshotAsync(ChunkSnapshot chunkSnapshot, boolean chunkLoadedAssured) {
-        Runnable runnable = () -> {
-            // count observers
-            int observersCounter = 0;
-            for (int x = 0; x < 16; x++) {
-                for (int z = 0; z < 16; z++) {
-                    int maxY = chunkSnapshot.getHighestBlockYAt(x, z);
-                    for (int y = 0; y <= maxY; y++) {
-                        BlockData blockData = chunkSnapshot.getBlockData(x, y, z);
-                        if (blockData instanceof Observer) {
-                            observersCounter++;
-                        }
-                    }
-                }
-            }
-            Trio<Integer, Integer, String> chunkKey = ChunkWithKey.getChunkKey(chunkSnapshot);
-
-            if (observersCounter > 0) {
-                if (configManager.getDebugLog()) {
-                    plugin.getLogger().info(
-                            "Detected chunk [" + chunkSnapshot.getX() + "," + chunkSnapshot.getZ() + "] with observers: " + observersCounter
-                    );
-                }
-
-                this.observersCounter.put(chunkKey, observersCounter);
-                loadedChunks.add(chunkKey);
-
-                if (!chunkLoadedAssured) {
-                    // check and load chunk in main thread
-                    scheduler.runTask(this.plugin, () -> this.recalcChunkLoadStateByKey(chunkKey));
-                }
-            } else {
-                this.observersCounter.remove(chunkKey);
-                reviewRemovedLoadedChunk(chunkKey);
-            }
-        };
-
-        scheduler.runTaskAsynchronously(plugin, runnable);
-    }
-
-    public void updateChunkTTL(Chunk chunk) {
-        Trio<Integer, Integer, String> chunkKey = ChunkWithKey.getChunkKey(chunk);
-        temporaryLoadedChunks.put(chunkKey, System.currentTimeMillis() + configManager.getUnloadDelay());
-        loadedChunks.add(chunkKey);
-        recalcChunkLoadState(chunk);
-    }
-
-    public void unloadExpiredChunks() {
-        long currentTime = System.currentTimeMillis();
-
-        List<Trio<Integer, Integer, String>> expiredKeys = temporaryLoadedChunks.entrySet().stream()
-                .filter(entry -> currentTime >= entry.getValue())
-                .map(Map.Entry::getKey)
-                .collect(Collectors.toList());
-
-        for (Trio<Integer, Integer, String> chunkKey : expiredKeys) {
-            temporaryLoadedChunks.remove(chunkKey);
-            reviewRemovedLoadedChunk(chunkKey);
-            recalcChunkLoadStateByKey(chunkKey);
-        }
+        chunkManager.scanChunkSnapshotAsync(snapshot);
     }
 
     public int getLoadedChunksCount() {
-        return loadedChunks.size();
+        return chunkManager.getLoadedChunksCount();
     }
 
     public int getTemporaryLoadedChunksCount() {
-        return temporaryLoadedChunks.size();
+        return chunkManager.getTemporaryLoadedChunksCount();
     }
     public int getLoadedChunksByObserversCount() {
-        return observersCounter.size();
+        return chunkManager.getLoadedChunksByObserversCount();
     }
 
     public void resetCooldown() {
         lastCooldownTime = 0L;
-    }
-
-    public Backup getBackupData() {
-        return new Backup(
-                observersCounter.keySet().toArray(new Trio[0]),
-                temporaryLoadedChunks.keySet().toArray(new Trio[0])
-        );
-    }
-
-    public void applyBackupData(Backup backup) {
-        Server server = plugin.getServer();
-        // load observers
-        for (Trio<Integer, Integer, String> chunkKeyWithObservers : backup.observers) {
-            Chunk chunk = ChunkWithKey.getChunkByKey(server, chunkKeyWithObservers);
-            if (chunk == null) {
-                continue;
-            }
-            this.scanChunkSnapshotAsync(
-                    chunk.getChunkSnapshot(true, false, false),
-                    false
-            );
-        }
-
-        // load temporary
-        for (Trio<Integer, Integer, String> chunkKeyWithObservers : backup.observers) {
-            Chunk chunk = ChunkWithKey.getChunkByKey(server, chunkKeyWithObservers);
-            if (chunk == null) {
-                continue;
-            }
-            updateChunkTTL(chunk);
-        }
     }
 }

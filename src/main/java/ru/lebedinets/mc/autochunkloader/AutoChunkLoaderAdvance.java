@@ -10,6 +10,7 @@ import java.util.Objects;
 public final class AutoChunkLoaderAdvance extends JavaPlugin {
 
     private ConfigManager configManager;
+    private ChunkManager chunkManager;
     private EventHandlers eventHandlers;
 
     @Override
@@ -20,12 +21,16 @@ public final class AutoChunkLoaderAdvance extends JavaPlugin {
         configManager = new ConfigManager(this);
         BukkitScheduler scheduler = Bukkit.getScheduler();
 
-        eventHandlers = new EventHandlers(this, configManager, scheduler);
+        chunkManager = new ChunkManager(
+                this, scheduler, configManager
+        );
+
+        eventHandlers = new EventHandlers(this, configManager, chunkManager);
         getServer().getPluginManager().registerEvents(eventHandlers, this);
         loadBackup();
 
         // Schedule a repeating task to check and unload chunks without minecarts
-        scheduler.scheduleSyncRepeatingTask(this, eventHandlers::unloadExpiredChunks, 0, configManager.getUnloadPeriod());
+        scheduler.scheduleSyncRepeatingTask(this, chunkManager::unloadExpiredChunks, 0, configManager.getUnloadPeriod());
         scheduler.scheduleSyncRepeatingTask(this, this::saveBackup, configManager.getBackupPeriod(), configManager.getBackupPeriod());
 
         Commands commands = new Commands(this, configManager, eventHandlers);
@@ -46,7 +51,7 @@ public final class AutoChunkLoaderAdvance extends JavaPlugin {
 
     public void saveBackup() {
         getLogger().info("Start backup AutoChunkLoaderAdvance!");
-        Backup backup = eventHandlers.getBackupData();
+        Backup backup = chunkManager.getBackupData();
         backup.dump(this);
     }
 
@@ -58,7 +63,7 @@ public final class AutoChunkLoaderAdvance extends JavaPlugin {
         }
 
         getLogger().info("Loading Backup...");
-        eventHandlers.applyBackupData(backup);
+        chunkManager.applyBackupData(backup);
         getLogger().info("Backup loaded!");
     }
 }
