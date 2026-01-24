@@ -1,10 +1,7 @@
 package ru.lebedinets.mc.autochunkloader;
 
 import io.arxila.javatuples.Trio;
-import org.bukkit.Chunk;
-import org.bukkit.ChunkSnapshot;
-import org.bukkit.Server;
-import org.bukkit.World;
+import org.bukkit.*;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.type.Observer;
 import org.bukkit.plugin.Plugin;
@@ -72,14 +69,26 @@ public class ChunkManager {
         }
     }
 
+    public void scanCurrentChunks() {
+        for (World world : plugin.getServer().getWorlds()) {
+            for (Chunk chunk : world.getLoadedChunks()) {
+                scanChunkSnapshotAsync(chunk.getChunkSnapshot());
+            }
+        }
+    }
+
     public void scanChunkSnapshotAsync(ChunkSnapshot chunkSnapshot) {
         Runnable runnable = () -> {
+            Trio<Integer, Integer, String> chunkKey = ChunkWithKey.getChunkKey(chunkSnapshot);
+            debugLog("Scanning chunk " + chunkKey);
             // count observers
+            int worldMinY = -64;
             int observersCounter = 0;
             for (int x = 0; x < 16; x++) {
                 for (int z = 0; z < 16; z++) {
                     int maxY = chunkSnapshot.getHighestBlockYAt(x, z);
-                    for (int y = 0; y <= maxY; y++) {
+
+                    for (int y = worldMinY; y <= maxY; y++) {
                         BlockData blockData = chunkSnapshot.getBlockData(x, y, z);
                         if (blockData instanceof Observer) {
                             observersCounter++;
@@ -87,7 +96,6 @@ public class ChunkManager {
                     }
                 }
             }
-            Trio<Integer, Integer, String> chunkKey = ChunkWithKey.getChunkKey(chunkSnapshot);
             updateObserversInChunk(chunkKey, observersCounter);
 
             if (observersCounter > 0) {
@@ -227,6 +235,10 @@ public class ChunkManager {
         if (configManager.getDebugLog()) {
             plugin.getLogger().info(log);
         }
+    }
+
+    private void infoLog(String log) {
+        plugin.getLogger().info(log);
     }
 
     public int getLoadedChunksCount() {

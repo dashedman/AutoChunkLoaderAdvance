@@ -26,6 +26,7 @@ public final class AutoChunkLoaderAdvance extends JavaPlugin {
         EventHandlers eventHandlers = new EventHandlers(this, configManager, chunkManager);
         getServer().getPluginManager().registerEvents(eventHandlers, this);
         loadBackup();
+        chunkManager.scanCurrentChunks();
 
         // Schedule a repeating task to check and unload chunks without minecarts
         scheduler.runTaskTimerAsynchronously(this, chunkManager::unloadExpiredChunks, 0, configManager.getUnloadPeriod());
@@ -34,6 +35,7 @@ public final class AutoChunkLoaderAdvance extends JavaPlugin {
         Commands commands = new Commands(this, configManager, chunkManager, eventHandlers);
         Objects.requireNonNull(getCommand("acl")).setExecutor(commands);
         Objects.requireNonNull(getCommand("autochunkloader")).setExecutor(commands);
+
 
         // bStats
         int pluginId = 19552;
