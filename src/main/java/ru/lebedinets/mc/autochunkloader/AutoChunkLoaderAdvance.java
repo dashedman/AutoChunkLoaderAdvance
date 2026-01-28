@@ -38,7 +38,7 @@ public final class AutoChunkLoaderAdvance extends JavaPlugin {
 
 
         // bStats
-        int pluginId = 19552;
+        int pluginId = 29121;
         Metrics metrics = new Metrics(this, pluginId);
     }
 

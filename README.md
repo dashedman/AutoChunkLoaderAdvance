@@ -18,4 +18,4 @@ Installation:
  - Restart server
  - Modify `/plugins/AutoChunkLoaderAdvance/config.yml` file for your needs
 
-[![stats](https://bstats.org/signatures/bukkit/AutoChunkLoaderAdvance.svg)](https://bstats.org/plugin/bukkit/AutoChunkLoaderAdvance/19552)
+[![stats](https://bstats.org/signatures/bukkit/AutoChunkLoaderAdvance.svg)](https://bstats.org/plugin/bukkit/AutoChunkLoaderAdvance/29121)
