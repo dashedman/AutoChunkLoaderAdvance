@@ -11,11 +11,14 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.*;
 import org.bukkit.event.entity.CreatureSpawnEvent;
+import org.bukkit.event.entity.EntityDropItemEvent;
+import org.bukkit.event.entity.ItemMergeEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.vehicle.VehicleMoveEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.inventory.BlockInventoryHolder;
 import org.bukkit.inventory.InventoryHolder;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.util.Vector;
 
@@ -289,6 +292,24 @@ public class EventHandlers implements Listener {
                 }
             }
         }
+    }
+
+    @EventHandler
+    public void onBlockDispense(BlockDispenseEvent event) {
+        // Called when block dispense item
+        chunkManager.updateItemsTTLFromStack(event.getItem(), event.getBlock());
+    }
+
+    @EventHandler
+    public void onBlockDropItem(BlockDropItemEvent event) {
+        // Called when block broken and drops loot from self
+        chunkManager.updateItemsListTTL(event.getItems());
+    }
+
+    @EventHandler
+    public void onEntityDropItem(EntityDropItemEvent event) {
+        // Called when entity drops item
+        chunkManager.updateItemTTL(event.getItemDrop());
     }
 
     public int getLoadedChunksCount() {

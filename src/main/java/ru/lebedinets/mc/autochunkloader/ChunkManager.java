@@ -1,15 +1,28 @@
 package ru.lebedinets.mc.autochunkloader;
 
+import io.arxila.javatuples.Pair;
 import io.arxila.javatuples.Trio;
 import org.bukkit.*;
+import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.type.Observer;
+import org.bukkit.entity.Item;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitScheduler;
 import org.bukkit.scheduler.BukkitTask;
 
 import java.util.*;
 import java.util.stream.Collectors;
+
+
+class ItemTTLComparator implements Comparator<Pair<Long, Item>> {
+    @Override
+    public int compare(Pair<Long, Item> x, Pair<Long, Item> y) {
+        return (int) (x.value0() - y.value0());
+    }
+}
+
 
 public class ChunkManager {
     // manage loading and forcing chunks
@@ -23,6 +36,10 @@ public class ChunkManager {
     // Pivots that contains observers, counter for observers
     private final Map<Trio<Integer, Integer, String>, Integer> observersCounter = new HashMap<>();
     private final Map<Trio<Integer, Integer, String>, BukkitTask> loadingTasks = new HashMap<>();
+
+    // sorted by timepoint ascending
+    private final PriorityQueue<Pair<Long, Item>> itemsWithTTL = new PriorityQueue<>(new ItemTTLComparator());
+    private BukkitTask checkItemsTTLTask = null;
 
     private final Plugin plugin;
     private final BukkitScheduler scheduler;
@@ -104,6 +121,100 @@ public class ChunkManager {
         };
 
         scheduler.runTaskAsynchronously(plugin, runnable);
+    }
+
+    public void updateItemsTTLFromStack(ItemStack itemStack, Block block) {
+        Chunk chunk = block.getChunk();
+        if (!this.loadedChunks.containsKey(ChunkWithKey.getChunkKey(chunk))) {
+            return;
+        }
+
+        World world = chunk.getWorld();
+        String worldName = world.getName();
+
+        // async wait while event will be passed and item will be dispensed like entity to world
+        Runnable runnable = () -> {
+            // seek for entity in chunks that has same item stack
+            int chunkLoadRadius = configManager.getChunkLoadRadius();
+
+            List<Item> items = new ArrayList<>();
+            for (int x = -chunkLoadRadius; x <= chunkLoadRadius; x++) {
+                for (int z = -chunkLoadRadius; z <= chunkLoadRadius; z++) {
+                    int targetX = chunk.getX() + x;
+                    int targetZ = chunk.getZ() + z;
+
+                    Trio<Integer, Integer, String> targetKey = ChunkWithKey.getChunkKey(targetX, targetZ, worldName);
+                    Chunk targetChunk = world.getChunkAt(targetX, targetZ);
+
+                    Arrays.stream(targetChunk.getEntities())
+                            .filter(entity -> entity instanceof Item && ((Item) entity).getItemStack().equals(itemStack))
+                            .forEach(entity -> items.add((Item) entity));
+                }
+            }
+
+            if (items.isEmpty()) {
+                plugin.getLogger().warning("Detected empty items list for ItemStack at: "+ worldName+ ", " +block.getLocation());
+                return;
+            }
+
+            updateItemsListTTL(items);
+        };
+
+        scheduler.runTask(this.plugin, runnable);
+    }
+
+    public void updateItemTTL(Item item) {
+        List<Item> oneItemList = new LinkedList<>();
+        oneItemList.add(item);
+        updateItemsListTTL(oneItemList);
+    }
+
+    public void updateItemsListTTL(List<Item> items) {
+        for (Item item : items) {
+            Chunk chunk = item.getLocation().getChunk();
+            if (!loadedChunks.containsKey(ChunkWithKey.getChunkKey(chunk))) {
+                // item not in chunk loaded by plugin
+                continue;
+            }
+
+            Pair<Long, Item> ttlPair = new Pair<>(System.currentTimeMillis() + configManager.getDroppedItemsLifetime(), item);
+            itemsWithTTL.add(ttlPair);
+        }
+
+        rescheduleItemTTLTask();
+    }
+
+    public void rescheduleItemTTLTask() {
+        if (this.checkItemsTTLTask != null) {
+            this.checkItemsTTLTask.cancel();
+            this.checkItemsTTLTask = null;
+        }
+
+        if (itemsWithTTL.isEmpty()) {
+            return;
+        }
+
+        long nearestTimepoint = Objects.requireNonNull(itemsWithTTL.peek()).value0();
+        // convert to ticks
+        long delayToExpire = (nearestTimepoint - System.currentTimeMillis()) / 50;
+        this.checkItemsTTLTask = scheduler.runTaskLater(this.plugin, this::removeExpiredItems, delayToExpire);
+    }
+
+    public void removeExpiredItems() {
+        long currentTime = System.currentTimeMillis();
+
+        while (!this.itemsWithTTL.isEmpty()) {
+            Pair<Long, Item> ttlPair = this.itemsWithTTL.poll();
+            long ttl = ttlPair.value0();
+            if (ttl <= currentTime) {
+                Item item = ttlPair.value1();
+                item.remove();
+            } else {
+                this.itemsWithTTL.add(ttlPair);
+                break;
+            }
+        }
+        rescheduleItemTTLTask();
     }
 
     public void updateChunkTTL(Trio<Integer, Integer, String> chunkKey) {

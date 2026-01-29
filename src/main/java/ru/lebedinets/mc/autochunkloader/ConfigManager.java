@@ -19,6 +19,7 @@ public class ConfigManager {
     private int unloadPeriod = 20; // Period in ticks (each second)
     private long warningCooldown = 30000L; // Cooldown after showing warning
     private long backupPeriod = 120000L; // Backup period
+    private long droppedItemsLifetime = 5000L; // Lifetime in milliseconds for items dropped at loaded chunks
     private double spawnRatio = 0; // Spawn ratio for natural spawn in force loaded chunks (0 <= ratio <= 1, 0 - cancel all spawns, 1 - pass all spawns)
     private boolean disableWarnings = false;
     private boolean disableRedstone = false;
@@ -53,6 +54,7 @@ public class ConfigManager {
         disableWarnings = config.getBoolean("disableWarnings");
         disableRedstone = config.getBoolean("disableRedstone");
         disableObservers = config.getBoolean("disableObservers");
+        droppedItemsLifetime = config.getLong("droppedItemsLifetime");
         disableHoppers = config.getBoolean("disableHoppers");
         disableMinecarts = config.getBoolean("disableMinecarts");
         worlds = new HashSet<>(config.getStringList("worlds"));
@@ -90,6 +92,10 @@ public class ConfigManager {
 
     public int getUnloadPeriod() {
         return unloadPeriod;
+    }
+
+    public long getDroppedItemsLifetime() {
+        return droppedItemsLifetime;
     }
 
     public long getWarningCooldown() {

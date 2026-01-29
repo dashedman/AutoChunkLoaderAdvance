@@ -7,7 +7,8 @@ unloadDelay: 30000 # Delay how long force loaded chunks should be loaded (in mil
 unloadPeriod: 20 # How often to try unloading chunks (in ticks)
 warningCooldown: 30000 # Limit reach repeat cooldown (in milliseconds)
 backupPeriod: 120000 # Backup period (in milliseconds)
-spawnRatio: 0 # Spawn ratio for natural spawn in force loaded chunks (0 <= ratio <= 1, 0 - cancel all spawns, 1 - pass all spawns)
+droppedItemsLifetime: 5000 # Lifetime in milliseconds for items dropped at chunks loaded by plugin
+spawnRatio: 0 # Spawn ratio for natural spawns in force loaded chunks (0 <= ratio <= 1, 0 - cancel all spawns, 1 - accept all spawns)
 disableWarnings: false
 disableRedstone: false
 disableMinecarts: false

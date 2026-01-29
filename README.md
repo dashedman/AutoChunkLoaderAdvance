@@ -8,14 +8,25 @@ and keep chunks with observers and working hoppers (pipes and timers).
 
 It can be used for transporting resources in chest minecarts through whole world, 
 making large redstone circuits, making auto-farms on a long distance.
-Keep in mind with incorrect use this plugin can negatively affect server performance!
 
 ### Keep in mind with incorrect use this plugin can negatively affect server performance!
 
-Installation:
+---
+
+### Download:
+
+- [Modrinth](https://modrinth.com/plugin/autochunkloaderadvance)
+
+### Installation:
  - Download jar file
  - Put this file into `/plugins` folder of your Spigot server
  - Restart server
  - Modify `/plugins/AutoChunkLoaderAdvance/config.yml` file for your needs
+
+### Extra:
+ - You can control **spawn ratio** on chunks affected by this plugin. (See in config: `spawnRatio`)
+ - You can control **dropped items lifetime** on chunks affected by this plugin. (See in config: `droppedItemsLifetime`)
+
+### Statistic:
 
 [![stats](https://bstats.org/signatures/bukkit/AutoChunkLoaderAdvance.svg)](https://bstats.org/plugin/bukkit/AutoChunkLoaderAdvance/29121)
