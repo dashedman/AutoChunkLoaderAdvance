@@ -24,7 +24,6 @@ making large redstone circuits, making auto-farms on a long distance.
  - Autoload chunks with **working hoppers** (when they move item to somewhere).
  - Keep chunks with **observers**.
  - Autoload with **observers moved by pistons** (flying machines).
- - Control **spawn ratio** on chunks affected by this plugin. (See in config: `spawnRatio`)
  - Control **dropped items lifetime** on chunks affected by this plugin. (See in config: `droppedItemsLifetime`)
 
 **Installation:**

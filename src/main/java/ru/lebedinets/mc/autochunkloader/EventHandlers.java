@@ -12,13 +12,12 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.*;
 import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.entity.EntityDropItemEvent;
-import org.bukkit.event.entity.ItemMergeEvent;
+import org.bukkit.event.entity.ItemSpawnEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.vehicle.VehicleMoveEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.inventory.BlockInventoryHolder;
 import org.bukkit.inventory.InventoryHolder;
-import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.util.Vector;
 
@@ -269,47 +268,23 @@ public class EventHandlers implements Listener {
 
     @EventHandler
     public void onChunkLoad(ChunkLoadEvent event) {
-        ChunkSnapshot snapshot = event.getChunk().getChunkSnapshot(true, false, false);
-        chunkManager.scanChunkSnapshotAsync(snapshot);
+        Chunk chunk = event.getChunk();
+        ChunkSnapshot snapshot = chunk.getChunkSnapshot(true, false, false);
+        chunkManager.scanChunkSnapshotAsync(snapshot, chunk.getWorld().getMinHeight());
     }
 
     @EventHandler
-    public void onCreatureSpawnEvent(CreatureSpawnEvent event) {
-        double spawnRatio = configManager.getSpawnRatio();
-        if (spawnRatio == 1.0) {
-            return;
+    public void onItemSpawn(ItemSpawnEvent event) {
+        // Called when item spawned
+        Location itemLoc = event.getLocation();
+        Collection<Player> players = itemLoc.getChunk().getPlayersSeeingChunk();
+        double itemsPluginRadiusSquared = Math.pow(configManager.getChunkLoadRadius() * 16, 2);
+        boolean isItemFarOffAllPlayers = players.stream()
+                .allMatch(player -> player.getLocation().distanceSquared(itemLoc) > itemsPluginRadiusSquared);
+
+        if (isItemFarOffAllPlayers) {
+            chunkManager.updateItemTTL(event.getEntity());
         }
-
-        CreatureSpawnEvent.SpawnReason reason = event.getSpawnReason();
-        if (
-                reason == CreatureSpawnEvent.SpawnReason.DEFAULT ||
-                reason == CreatureSpawnEvent.SpawnReason.NATURAL
-        ) {
-            Chunk chunk = event.getLocation().getChunk();
-            if (chunkManager.shouldBeLoaded(ChunkWithKey.getChunkKey(chunk))) {
-                if (Math.random() > spawnRatio) {
-                    event.setCancelled(true);
-                }
-            }
-        }
-    }
-
-    @EventHandler
-    public void onBlockDispense(BlockDispenseEvent event) {
-        // Called when block dispense item
-        chunkManager.updateItemsTTLFromStack(event.getItem(), event.getBlock());
-    }
-
-    @EventHandler
-    public void onBlockDropItem(BlockDropItemEvent event) {
-        // Called when block broken and drops loot from self
-        chunkManager.updateItemsListTTL(event.getItems());
-    }
-
-    @EventHandler
-    public void onEntityDropItem(EntityDropItemEvent event) {
-        // Called when entity drops item
-        chunkManager.updateItemTTL(event.getItemDrop());
     }
 
     public int getLoadedChunksCount() {

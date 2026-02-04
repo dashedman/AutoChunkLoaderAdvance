@@ -80,6 +80,15 @@ public class Commands implements CommandExecutor, TabCompleter {
                         }
                         break;
 
+                    case "view":
+                        if (sender.hasPermission("autochunkloader.stats")) {
+                            sender.sendMessage(
+                                    ChatColor.GREEN + "Loaded chunks: " + chunkManager.getLoadedChunksInfo()
+                            );
+                        } else {
+                            sender.sendMessage(ChatColor.RED + "You don't have permission to use this command.");
+                        }
+                        break;
                     case "about":
                     case "ab":
                     case "a":
@@ -93,7 +102,7 @@ public class Commands implements CommandExecutor, TabCompleter {
                         break;
 
                     default:
-                        sender.sendMessage(ChatColor.RED + "Unknown subcommand");
+                        sender.sendMessage(ChatColor.RED + "Unknown subcommand. Check commands in `help`");
                         break;
                 }
             } else {

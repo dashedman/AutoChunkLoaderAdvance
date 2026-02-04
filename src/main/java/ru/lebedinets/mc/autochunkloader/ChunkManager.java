@@ -89,17 +89,16 @@ public class ChunkManager {
     public void scanCurrentChunks() {
         for (World world : plugin.getServer().getWorlds()) {
             for (Chunk chunk : world.getLoadedChunks()) {
-                scanChunkSnapshotAsync(chunk.getChunkSnapshot());
+                scanChunkSnapshotAsync(chunk.getChunkSnapshot(), world.getMinHeight());
             }
         }
     }
 
-    public void scanChunkSnapshotAsync(ChunkSnapshot chunkSnapshot) {
+    public void scanChunkSnapshotAsync(ChunkSnapshot chunkSnapshot, int worldMinY) {
         Runnable runnable = () -> {
             Trio<Integer, Integer, String> chunkKey = ChunkWithKey.getChunkKey(chunkSnapshot);
             debugLog("Scanning chunk " + chunkKey);
             // count observers
-            int worldMinY = -64;
             int observersCounter = 0;
             for (int x = 0; x < 16; x++) {
                 for (int z = 0; z < 16; z++) {
@@ -121,46 +120,6 @@ public class ChunkManager {
         };
 
         scheduler.runTaskAsynchronously(plugin, runnable);
-    }
-
-    public void updateItemsTTLFromStack(ItemStack itemStack, Block block) {
-        Chunk chunk = block.getChunk();
-        if (!this.loadedChunks.containsKey(ChunkWithKey.getChunkKey(chunk))) {
-            return;
-        }
-
-        World world = chunk.getWorld();
-        String worldName = world.getName();
-
-        // async wait while event will be passed and item will be dispensed like entity to world
-        Runnable runnable = () -> {
-            // seek for entity in chunks that has same item stack
-            int chunkLoadRadius = configManager.getChunkLoadRadius();
-
-            List<Item> items = new ArrayList<>();
-            for (int x = -chunkLoadRadius; x <= chunkLoadRadius; x++) {
-                for (int z = -chunkLoadRadius; z <= chunkLoadRadius; z++) {
-                    int targetX = chunk.getX() + x;
-                    int targetZ = chunk.getZ() + z;
-
-                    Trio<Integer, Integer, String> targetKey = ChunkWithKey.getChunkKey(targetX, targetZ, worldName);
-                    Chunk targetChunk = world.getChunkAt(targetX, targetZ);
-
-                    Arrays.stream(targetChunk.getEntities())
-                            .filter(entity -> entity instanceof Item && ((Item) entity).getItemStack().equals(itemStack))
-                            .forEach(entity -> items.add((Item) entity));
-                }
-            }
-
-            if (items.isEmpty()) {
-                plugin.getLogger().warning("Detected empty items list for ItemStack at: "+ worldName+ ", " +block.getLocation());
-                return;
-            }
-
-            updateItemsListTTL(items);
-        };
-
-        scheduler.runTask(this.plugin, runnable);
     }
 
     public void updateItemTTL(Item item) {
@@ -218,35 +177,40 @@ public class ChunkManager {
     }
 
     public void updateChunkTTL(Trio<Integer, Integer, String> chunkKey) {
-        if (!temporaryLoadedChunks.containsKey(chunkKey)) {
-            addPivot(chunkKey);
-            insureChunkForceAndLoadStateTask(chunkKey);
+        synchronized (temporaryLoadedChunks) {
+            if (!temporaryLoadedChunks.containsKey(chunkKey)) {
+                addPivot(chunkKey);
+            }
+            temporaryLoadedChunks.put(chunkKey, System.currentTimeMillis() + configManager.getUnloadDelay());
         }
-        temporaryLoadedChunks.put(chunkKey, System.currentTimeMillis() + configManager.getUnloadDelay());
     }
 
     public void updateAllChunksTTL() {
-        for (Trio<Integer, Integer, String> chunkKey : this.temporaryLoadedChunks.keySet()) {
+        for (Trio<Integer, Integer, String> chunkKey : this.temporaryLoadedChunks.keySet().stream().toList()) {
             updateChunkTTL(chunkKey);
         }
     }
 
     public void expireChunkTTL(Trio<Integer, Integer, String> chunkKey) {
-        if (!temporaryLoadedChunks.containsKey(chunkKey)) {
-            return;
+        synchronized (temporaryLoadedChunks) {
+            if (!temporaryLoadedChunks.containsKey(chunkKey)) {
+                return;
+            }
+            temporaryLoadedChunks.remove(chunkKey);
+            removePivot(chunkKey);
         }
-        temporaryLoadedChunks.remove(chunkKey);
-        removePivot(chunkKey);
-        insureChunkForceAndLoadStateTask(chunkKey);
     }
 
     public void unloadExpiredChunks() {
         long currentTime = System.currentTimeMillis();
 
-        List<Trio<Integer, Integer, String>> expiredKeys = temporaryLoadedChunks.entrySet().stream()
-                .filter(entry -> currentTime >= entry.getValue())
-                .map(Map.Entry::getKey)
-                .collect(Collectors.toList());
+        List<Trio<Integer, Integer, String>> expiredKeys;
+        synchronized (temporaryLoadedChunks) {
+            expiredKeys = temporaryLoadedChunks.entrySet().stream()
+                    .filter(entry -> currentTime >= entry.getValue())
+                    .map(Map.Entry::getKey)
+                    .toList();
+        }
 
         for (Trio<Integer, Integer, String> chunkKey : expiredKeys) {
             expireChunkTTL(chunkKey);
@@ -363,6 +327,22 @@ public class ChunkManager {
         return observersCounter.size();
     }
 
+    public String getLoadedChunksInfo() {
+        StringBuilder info = new StringBuilder();
+        loadedChunks.keySet()
+                .stream()
+                .collect(Collectors.groupingBy(Trio::value2))
+                .forEach((key, value) -> {
+                    info.append("World ").append(key).append(":\n");
+
+                    value.forEach(chunkKey -> {
+                        info.append("  [").append(chunkKey.value0()).append(", ").append(chunkKey.value1()).append("]\n");
+                    });
+                });
+
+        return info.toString();
+    }
+
     public Backup getBackupData() {
         return new Backup(
                 observersCounter.keySet().toArray(new Trio[0]),
@@ -379,7 +359,7 @@ public class ChunkManager {
             if (chunk == null) {
                 continue;
             }
-            this.scanChunkSnapshotAsync(chunk.getChunkSnapshot(true, false, false));
+            this.scanChunkSnapshotAsync(chunk.getChunkSnapshot(true, false, false), chunk.getWorld().getMinHeight());
         }
 
         // load temporary
