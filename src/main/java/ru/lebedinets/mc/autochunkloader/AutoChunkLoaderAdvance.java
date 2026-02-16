@@ -5,6 +5,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitScheduler;
 
+import java.io.File;
 import java.util.Objects;
 
 public final class AutoChunkLoaderAdvance extends JavaPlugin {
@@ -36,7 +37,6 @@ public final class AutoChunkLoaderAdvance extends JavaPlugin {
         Objects.requireNonNull(getCommand("acl")).setExecutor(commands);
         Objects.requireNonNull(getCommand("autochunkloader")).setExecutor(commands);
 
-
         // bStats
         int pluginId = 29121;
         Metrics metrics = new Metrics(this, pluginId);
@@ -58,7 +58,8 @@ public final class AutoChunkLoaderAdvance extends JavaPlugin {
     public void loadBackup() {
         Backup backup = Backup.load(this);
         if (backup == null) {
-            getLogger().info("Backup is empty.");
+            getLogger().info("Backup is empty. Starting scan for observers in background");
+            chunkManager.scanAllGeneratedChunks();
             return;
         }
 

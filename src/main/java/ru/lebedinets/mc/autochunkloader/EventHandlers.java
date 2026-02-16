@@ -10,12 +10,9 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.*;
-import org.bukkit.event.entity.CreatureSpawnEvent;
-import org.bukkit.event.entity.EntityDropItemEvent;
 import org.bukkit.event.entity.ItemSpawnEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.vehicle.VehicleMoveEvent;
-import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.inventory.BlockInventoryHolder;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.plugin.Plugin;
@@ -264,13 +261,6 @@ public class EventHandlers implements Listener {
             Chunk chunk = block.getLocation().getChunk();
             chunkManager.updateChunkTTL(ChunkWithKey.getChunkKey(chunk));
         }
-    }
-
-    @EventHandler
-    public void onChunkLoad(ChunkLoadEvent event) {
-        Chunk chunk = event.getChunk();
-        ChunkSnapshot snapshot = chunk.getChunkSnapshot(true, false, false);
-        chunkManager.scanChunkSnapshotAsync(snapshot, chunk.getWorld().getMinHeight());
     }
 
     @EventHandler

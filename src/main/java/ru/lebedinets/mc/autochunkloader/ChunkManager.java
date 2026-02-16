@@ -1,17 +1,23 @@
 package ru.lebedinets.mc.autochunkloader;
 
+import de.pauleff.jmcx.api.IChunk;
+import de.pauleff.jmcx.api.IRegion;
+import de.pauleff.jmcx.formats.anvil.AnvilReader;
+import de.pauleff.jnbt.api.ICompoundTag;
+import de.pauleff.jnbt.api.IListTag;
 import io.arxila.javatuples.Pair;
 import io.arxila.javatuples.Trio;
 import org.bukkit.*;
-import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.type.Observer;
 import org.bukkit.entity.Item;
-import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitScheduler;
 import org.bukkit.scheduler.BukkitTask;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -92,6 +98,122 @@ public class ChunkManager {
                 scanChunkSnapshotAsync(chunk.getChunkSnapshot(), world.getMinHeight());
             }
         }
+    }
+
+    public void scanAllGeneratedChunks() {
+        // run async in other thread
+        Runnable runnable = () -> {
+            Runtime rt = Runtime.getRuntime();
+            for (World world : plugin.getServer().getWorlds()) {
+                File regionDir = switch (world.getName()) {
+                    case "world_nether" -> new File(world.getWorldFolder(), "DIM-1/region");
+                    case "world_the_end" -> new File(world.getWorldFolder(), "DIM1/region");
+                    default -> new File(world.getWorldFolder(), "region");
+                };
+
+                try {
+                    Files.walk(regionDir.toPath())
+                            .filter(path -> path.toString().endsWith(".mca"))
+                            .forEach(path -> {
+
+                                this.plugin.getLogger().info("Scanning for observers - " + path);
+                                AnvilReader reader = null;
+                                try {
+                                    reader = new AnvilReader(path.toFile());
+                                } catch (IOException e) {
+                                    this.plugin.getLogger().warning(e.toString());
+                                    return;
+                                }
+
+                                IRegion region = null;
+                                try {
+                                    region = reader.readRegion();
+                                } catch (IOException e) {
+                                    this.plugin.getLogger().warning(e.toString());
+                                    return;
+                                }
+                                List<IChunk> chunks = region.getChunks();
+
+                                for (IChunk chunk : chunks) {
+                                    ICompoundTag nbt = null;
+                                    try {
+                                        nbt = chunk.getNBTData();
+                                    } catch (IOException e) {
+                                        this.plugin.getLogger().warning(e.toString());
+                                        continue;
+                                    }
+                                    if (nbt == null) {
+                                        continue;
+                                    }
+                                    IListTag sections = nbt.getList("sections");
+
+                                    int observersChunkCounter = 0;
+                                    for (int i = 0; i < sections.size(); i++) {
+                                        ICompoundTag section = (ICompoundTag) sections.get(i);
+                                        ICompoundTag blockStates = section.getCompound("block_states");
+                                        if (blockStates == null) {
+                                            continue;
+                                        }
+                                        IListTag palette = blockStates.getList("palette");
+
+                                        // check for observer type in pallete
+                                        int observersInPalette = -1;
+                                        for (int j = 0; j < palette.size(); j++) {
+                                            ICompoundTag block = (ICompoundTag) palette.get(j);
+                                            if ("minecraft:observer".equals(block.getString("Name"))) {
+                                                observersInPalette = j;
+                                                break;
+                                            }
+                                        }
+
+                                        if (observersInPalette < 0) {
+                                            continue;
+                                        }
+
+                                        if (palette.size() == 1) {
+                                            observersChunkCounter += 16 * 16 * 16;
+                                            continue;
+                                        }
+
+                                        int maxIndexBits = Math.max(4, 32 - Integer.numberOfLeadingZeros(palette.size() - 1));
+                                        int indexMask = (1 << maxIndexBits) - 1;
+                                        int groupSize = 64 / maxIndexBits;
+                                        long[] blockData = blockStates.getLongArray("data");
+                                        for (long blocksGroup : blockData) {
+                                            for (int blockGroupNum = 0; blockGroupNum < groupSize; blockGroupNum++) {
+                                                long index = blocksGroup & indexMask;
+                                                if (index == observersInPalette) {
+                                                    observersChunkCounter++;
+                                                }
+
+                                                blocksGroup >>= maxIndexBits;
+                                            }
+                                        }
+                                    }
+
+                                    if(observersChunkCounter > 0) {
+                                        Trio<Integer, Integer, String> chunkKey = ChunkWithKey.getChunkKey(
+                                                chunk.getX(), chunk.getZ(), world.getName()
+                                        );
+                                        this.updateObserversInChunk(chunkKey, observersChunkCounter);
+                                        this.plugin.getLogger().info("Detected " + observersChunkCounter + " observers for " + chunkKey);
+                                    }
+                                }
+
+                                try {
+                                    reader.close();
+                                } catch (IOException e) {
+                                    throw new RuntimeException(e);
+                                }
+                            });
+                } catch (IOException e) {
+                    this.plugin.getLogger().warning(e.toString());
+                    continue;
+                }
+            }
+        };
+
+        scheduler.runTaskAsynchronously(plugin, runnable);
     }
 
     public void scanChunkSnapshotAsync(ChunkSnapshot chunkSnapshot, int worldMinY) {

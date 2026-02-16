@@ -1,0 +1,16 @@
+[project]
+name = "region-scan-py"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "lz4>=4.3.3",
+    "tqdm>=4.67.3",
+]
+
+[dependency-groups]
+dev = [
+    "nuitka>=4.0",
+    "zstandard>=0.23.0",
+]

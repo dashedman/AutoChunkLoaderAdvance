@@ -17,6 +17,12 @@ making large redstone circuits, making auto-farms on a long distance.
 
 - [Modrinth](https://modrinth.com/plugin/autochunkloaderadvance)
 
+**Build:**
+
+```commandline
+mvn clean package 
+```
+
 **Features:**
 
  - Autoload chunks with **moving minecarts**.
